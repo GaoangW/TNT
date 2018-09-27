@@ -26,6 +26,182 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 
+from skimage import data
+from skimage.color import rgb2gray
+from skimage.feature import match_descriptors, ORB, plot_matches
+from skimage.measure import ransac
+from skimage.transform import FundamentalMatrixTransform
+
+def check_bbox_near_img_bnd(bbox, img_size, margin):
+    # img_size = [x,y]
+    xmin = bbox[0,0]
+    ymin = bbox[0,1]
+    xmax = bbox[0,2]+bbox[0,0]
+    ymax = bbox[0,3]+bbox[0,1]
+    
+    check_flag = 0
+    if xmin<margin or ymin<margin:
+        check_flag = 1
+        return check_flag
+    if img_size[0]-xmax<margin or img_size[1]-ymax<margin:
+        check_flag = 1
+        return check_flag
+    
+    return check_flag
+
+def pred_bbox_by_F(bbox, F, show_flag, img1, img2):
+    #model, _, _, _, _ = estimateF(img1, img2)
+    #F = model.params
+    
+    # Create figure and axes
+    if show_flag==1:
+        fig1,ax1 = plt.subplots(1)
+
+    # Display the image
+    if show_flag==1:
+        ax1.imshow(img1)
+    
+    pred_bbox = np.zeros((len(bbox),4))
+    for n in range(len(bbox)):
+        xmin = bbox[n,0]
+        ymin = bbox[n,1]
+        xmax = bbox[n,2]+bbox[n,0]
+        ymax = bbox[n,3]+bbox[n,1]
+        w = bbox[n,2]
+        h = bbox[n,3]
+        if show_flag==1:
+            rect = patches.Rectangle((xmin,ymin),w,h,linewidth=1,edgecolor='#FF0000', facecolor='none')
+            ax1.add_patch(rect)
+    
+    if show_flag==1:
+        plt.show()
+        
+    # Create figure and axes
+    if show_flag==1:
+        fig2,ax2 = plt.subplots(1)
+
+    # Display the image
+    if show_flag==1:
+        ax2.imshow(img2)
+    
+    for n in range(len(bbox)):
+        xmin = bbox[n,0]
+        ymin = bbox[n,1]
+        xmax = bbox[n,2]+bbox[n,0]
+        ymax = bbox[n,3]+bbox[n,1]
+        w = bbox[n,2]
+        h = bbox[n,3]
+        
+        temp_A = np.zeros((4,2))
+        temp_b = np.zeros((4,1));
+        temp_pt = np.zeros((1,3))
+        temp_pt[0,:] = np.array([xmin,ymin,1])
+        A1 = np.matmul(temp_pt, np.transpose(F))
+        #
+        temp_A[0,0] = A1[0,0]
+        temp_A[0,1] = A1[0,1]
+        temp_b[0,0] = -A1[0,2]
+        
+        temp_pt[0,:] = np.array([xmax,ymin,1])
+        A2 = np.matmul(temp_pt, np.transpose(F))
+        temp_A[1,0] = A2[0,0]
+        temp_A[1,1] = A2[0,1]
+        temp_b[1,0] = -w*A2[0,0]-A2[0,2]
+        
+        temp_pt[0,:] = np.array([xmin,ymax,1])
+        A3 = np.matmul(temp_pt, np.transpose(F))
+        temp_A[2,0] = A3[0,0]
+        temp_A[2,1] = A3[0,1]
+        temp_b[2,0] = -h*A3[0,1]-A3[0,2]
+        
+        temp_pt[0,:] = np.array([xmax,ymax,1])
+        A4 = np.matmul(temp_pt, np.transpose(F))
+        temp_A[3,0] = A4[0,0]
+        temp_A[3,1] = A4[0,1]
+        temp_b[3,0] = -w*A4[0,0]-h*A4[0,1]-A4[0,2]
+        
+        new_loc = np.matmul(np.linalg.pinv(temp_A),temp_b)
+        xmin = new_loc[0,0]
+        ymin = new_loc[1,0]
+        xmax = new_loc[0,0]+w
+        ymax = new_loc[1,0]+h
+        
+        pred_bbox[n,0] = xmin
+        pred_bbox[n,1] = ymin
+        pred_bbox[n,2] = w
+        pred_bbox[n,3] = h
+        #import pdb; pdb.set_trace()
+        if show_flag==1:
+            rect = patches.Rectangle((xmin,ymin),w,h,linewidth=1,edgecolor='#FF0000', facecolor='none')
+            ax2.add_patch(rect)
+    
+    if show_flag==1:
+        plt.show()
+    return pred_bbox    
+    
+def crop_bbox_in_image(bbox, img_size):
+    new_bbox = bbox.copy()
+    new_bbox[bbox[:,0]<0,0] = 0
+    new_bbox[bbox[:,1]<0,1] = 0
+    xmax = bbox[:,0]+bbox[:,2]-1
+    ymax = bbox[:,1]+bbox[:,3]-1
+    xmax[xmax>img_size[1]] = img_size[1]
+    ymax[ymax>img_size[0]] = img_size[0]
+    new_bbox[:,2] = xmax-new_bbox[:,0]+1
+    new_bbox[:,3] = ymax-new_bbox[:,1]+1
+    return new_bbox
+    
+def estimateF(img1, img2):
+    
+    np.random.seed(0)
+
+    #img1, img2, groundtruth_disp = data.stereo_motorcycle()
+
+    img1_gray, img2_gray = map(rgb2gray, (img1, img2))
+    
+    descriptor_extractor = ORB()
+
+    descriptor_extractor.detect_and_extract(img1_gray)
+    keypoints_left = descriptor_extractor.keypoints
+    descriptors_left = descriptor_extractor.descriptors
+
+    descriptor_extractor.detect_and_extract(img2_gray)
+    keypoints_right = descriptor_extractor.keypoints
+    descriptors_right = descriptor_extractor.descriptors
+
+    matches = match_descriptors(descriptors_left, descriptors_right,
+                            cross_check=True)
+
+    # Estimate the epipolar geometry between the left and right image.
+
+    model, inliers = ransac((keypoints_left[matches[:, 0]],
+                         keypoints_right[matches[:, 1]]),
+                        FundamentalMatrixTransform, min_samples=8,
+                        residual_threshold=1, max_trials=5000)
+
+    inlier_keypoints_left = keypoints_left[matches[inliers, 0]]
+    inlier_keypoints_right = keypoints_right[matches[inliers, 1]]
+
+    print("Number of matches:", matches.shape[0])
+    print("Number of inliers:", inliers.sum())
+
+    # Visualize the results.
+    '''
+    fig, ax = plt.subplots(nrows=2, ncols=1)
+
+    plt.gray()
+
+    plot_matches(ax[0], img1, img2, keypoints_left, keypoints_right,
+                 matches[inliers], only_matches=True)
+    ax[0].axis("off")
+    ax[0].set_title("Inlier correspondences")
+    
+    plt.show()
+    '''
+    #import pdb; pdb.set_trace()
+    
+    return model, matches.shape[0], inliers.sum(), inlier_keypoints_left, inlier_keypoints_right
+
 def color_table(num): 
     digit = '0123456789ABCDEF' 
     table = [] 
@@ -202,6 +378,33 @@ def load_detection(file_name, dataset):
         M[:,1:6] = f[:,2:7]
         M[:,6:10] = f[:,10:14]
         #import pdb; pdb.set_trace()
+        return M
+    if dataset=='KITTI_3d_2':
+        f = np.loadtxt(file_name, dtype=str, delimiter=',')
+        f = np.array(f)
+        mask = np.zeros((len(f),1))
+        for n in range(len(f)):
+            # only for pedestrian
+            if f[n][11]=="Pedestrian" or f[n][11]=="Cyclist":
+                mask[n,0] = 1
+        num = int(np.sum(mask))
+        
+        M = np.zeros((num, 10))
+        cnt = 0
+        for n in range(len(f)):
+            if mask[n,0]==1:
+                M[cnt,0] = int(float(f[n][0]))+1
+                M[cnt,1] = int(float(f[n][1]))
+                M[cnt,2] = int(float(f[n][2]))
+                M[cnt,3] = int(float(f[n][3]))
+                M[cnt,4] = int(float(f[n][4]))
+                M[cnt,5] = float(f[n][10])/100.0
+                M[cnt,6] = float(f[n][5])/723.0
+                M[cnt,7] = float(f[n][7])/723.0
+                M[cnt,8] = float(f[n][8])/723.0
+                M[cnt,9] = float(f[n][9])/723.0
+                cnt = cnt+1
+            #import pdb; pdb.set_trace()
         return M
     
 def bbox_associate(overlap_mat, IOU_thresh): 
