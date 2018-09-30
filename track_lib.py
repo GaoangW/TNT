@@ -393,16 +393,16 @@ def load_detection(file_name, dataset):
         cnt = 0
         for n in range(len(f)):
             if mask[n,0]==1:
-                M[cnt,0] = int(float(f[n][0]))+1
+                M[cnt,0] = int(float(f[n][0]))
                 M[cnt,1] = int(float(f[n][1]))
                 M[cnt,2] = int(float(f[n][2]))
                 M[cnt,3] = int(float(f[n][3]))
                 M[cnt,4] = int(float(f[n][4]))
                 M[cnt,5] = float(f[n][10])/100.0
-                M[cnt,6] = float(f[n][5])/723.0
-                M[cnt,7] = float(f[n][7])/723.0
-                M[cnt,8] = float(f[n][8])/723.0
-                M[cnt,9] = float(f[n][9])/723.0
+                M[cnt,6] = float(f[n][5])
+                M[cnt,7] = float(f[n][7])
+                M[cnt,8] = float(f[n][8])
+                M[cnt,9] = float(f[n][9])
                 cnt = cnt+1
             #import pdb; pdb.set_trace()
         return M

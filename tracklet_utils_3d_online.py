@@ -34,6 +34,87 @@ global track_set
 remove_set = []
 track_set = []
 
+def convert_frames_to_video(pathIn,pathOut,fps): 
+    frame_array = [] 
+    files = [f for f in os.listdir(pathIn) if os.path.isfile(os.path.join(pathIn, f))]
+
+    #for sorting the file names properly
+    #files.sort(key = lambda x: int(x[5:-4]))
+
+    for i in range(len(files)):
+        filename=pathIn + files[i]
+        #reading each files
+        img = cv2.imread(filename)
+        height, width, layers = img.shape
+        
+        if i==0:
+            size = (width,height)
+        img = cv2.resize(img,size)
+        #print(filename)
+        #inserting the frames into an image array
+        frame_array.append(img)
+    
+    out = cv2.VideoWriter(pathOut,cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
+
+    for i in range(len(frame_array)):
+        # writing to a image array
+        out.write(frame_array[i])
+    out.release()
+    
+    
+def wrt_missing_det(save_mat):
+    # fr_id, track_id, xmin, ymin, xmax, ymax, x, y, w, h, det_score
+    global track_struct
+    for n in range(len(save_mat)):
+        fr_id = int(save_mat[n,0])
+        obj_id = int(save_mat[n,1])
+        if track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,0]==-1:
+            continue
+            
+        num_miss_fr = int(fr_id-track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,0]-1)
+        if num_miss_fr<=0:
+            continue
+        
+        temp_save_mat = np.zeros((num_miss_fr,12))
+        fr_range = np.array(range(int(track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,0])+1,fr_id))
+        interp_xmin = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,2],save_mat[n,3]])
+        interp_ymin = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,3],save_mat[n,4]])
+        interp_xmax = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,4],save_mat[n,5]])
+        interp_ymax = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,5],save_mat[n,6]])
+        interp_x_3d = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,6],save_mat[n,7]])
+        interp_y_3d = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,7],save_mat[n,8]])
+        interp_w_3d = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,8],save_mat[n,9]])
+        interp_h_3d = np.interp(fr_range, [fr_range[0]-1, fr_id], 
+                                [track_struct['tracklet_mat']['obj_end_fr_info'][obj_id,9],save_mat[n,10]])
+        temp_save_mat[:,0] = fr_range
+        temp_save_mat[:,1] = obj_id
+        temp_save_mat[:,2] = -1
+        temp_save_mat[:,3] = interp_xmin
+        temp_save_mat[:,4] = interp_ymin
+        temp_save_mat[:,5] = interp_xmax
+        temp_save_mat[:,6] = interp_ymax
+        temp_save_mat[:,7] = interp_x_3d
+        temp_save_mat[:,8] = interp_y_3d
+        temp_save_mat[:,9] = interp_w_3d
+        temp_save_mat[:,10] = interp_h_3d
+        temp_save_mat[:,11] = -1
+    
+        f = open(track_struct['file_path']['txt_result_path'], 'a')  
+        np.savetxt(f, temp_save_mat, delimiter=',')
+        f.close()
+         
+    # update track_struct['tracklet_mat']['obj_end_fr_info']
+    track_struct['tracklet_mat']['obj_end_fr_info'][save_mat[:,1].astype(int),0] = save_mat[:,0]
+    track_struct['tracklet_mat']['obj_end_fr_info'][save_mat[:,1].astype(int),1:] = save_mat[:,2:]
+    return
+        
 def draw_result(img, save_mat, fr_id): 
     
     global track_struct
@@ -1392,28 +1473,30 @@ def init_triplet_model():
             tf.train.start_queue_runners(coord=coord, sess=triplet_sess)
     return
 
-def TC_online(det_M, img, t_pointer, fr_idx):
+def TC_online(det_M, img, t_pointer, fr_idx, end_flag):
     global track_struct
     global triplet_graph
     global triplet_sess
     global tracklet_graph
     global tracklet_sess
     
+    prev_t_pointer = t_pointer
     num_bbox = len(det_M)
+    #print(num_bbox)
     track_struct['track_params']['img_size'] = img.shape
     track_struct['tracklet_mat']['imgs'].append(img)   
     
     # last frame in the time window
     max_track_id = np.max(track_struct['tracklet_mat']['track_id_mat'])
     if t_pointer==track_struct['track_params']['num_fr']:
-        
+        #import pdb; pdb.set_trace()
         # save tracking to file
         # fr_id, obj_id, track_id, x, y, w, h, x_3d, y_3d, w_3d, h_3d, det_score
         track_idx = np.where(track_struct['tracklet_mat']['xmin_mat'][:,0]!=-1)[0]
         num_save_id = len(track_idx)
         if num_save_id!=0:
             save_mat = np.zeros((num_save_id, 12))
-            save_mat[:,0] = fr_idx
+            save_mat[:,0] = fr_idx-track_struct['track_params']['num_fr']
             save_mat[:,1] = track_struct['tracklet_mat']['obj_id_mat'][track_idx]
             track_struct['tracklet_mat']['save_obj_id_mask'][save_mat[:,1].astype(int)] = 1
             save_mat[:,2] = track_struct['tracklet_mat']['track_id_mat'][track_idx]
@@ -1428,12 +1511,17 @@ def TC_online(det_M, img, t_pointer, fr_idx):
             save_mat[:,9] = track_struct['tracklet_mat']['w_3d_mat'][track_idx,0]
             save_mat[:,10] = track_struct['tracklet_mat']['h_3d_mat'][track_idx,0]
             save_mat[:,11] = track_struct['tracklet_mat']['det_score_mat'][track_idx,0]
+            
+            #import pdb; pdb.set_trace()
             f = open(track_struct['file_path']['txt_result_path'], 'a')  
             np.savetxt(f, save_mat, delimiter=',')
+            f.close()
+            wrt_missing_det(save_mat)
+            
         else:
             save_mat = []
             
-        draw_result(track_struct['tracklet_mat']['imgs'][0], save_mat, fr_idx-track_struct['track_params']['num_fr'])
+        #draw_result(track_struct['tracklet_mat']['imgs'][0], save_mat, fr_idx-track_struct['track_params']['num_fr'])
         del track_struct['tracklet_mat']['imgs'][0]
         
         # Slide the time window
@@ -1505,6 +1593,7 @@ def TC_online(det_M, img, t_pointer, fr_idx):
         track_struct['tracklet_mat']['appearance_fea_mat'][empty_fea_idx[0:len(patch_list)],1] = fr_idx
         
     elif t_pointer!=0 and num_bbox!=0:
+        #import pdb; pdb.set_trace()
         prev_bbox_idx = np.where(track_struct['tracklet_mat']['xmin_mat'][:,t_pointer-1]!=-1)[0]
         prev_num_bbox = len(prev_bbox_idx)
         if prev_num_bbox==0:
@@ -1578,7 +1667,7 @@ def TC_online(det_M, img, t_pointer, fr_idx):
             overlap_mat[color_dist>track_struct['track_params']['color_thresh']] = 0    
             idx1, idx2 = track_lib.bbox_associate(overlap_mat, track_struct['track_params']['IOU_thresh'])
             #if fr_idx==14:
-            #    import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             
             # assign the tracklet_mat
             if len(idx1)==0:
@@ -1643,7 +1732,7 @@ def TC_online(det_M, img, t_pointer, fr_idx):
     # Tracklet clustering
     
     iters = 20
-    if fr_idx%track_struct['track_params']['clustering_period']==track_struct['track_params']['clustering_period']-1:
+    if fr_idx%track_struct['track_params']['clustering_period']==track_struct['track_params']['clustering_period']-1 or end_flag==1:
         for n in range(iters):
             print("iteration")
             print(n)
@@ -1656,8 +1745,36 @@ def TC_online(det_M, img, t_pointer, fr_idx):
         # Update tracklet
         post_processing()
     
+    # for the last frame, save all the info to file
+    if end_flag==1:
+        for n in range(track_struct['tracklet_mat']['xmin_mat'].shape[1]):
+            
+            track_idx = np.where(track_struct['tracklet_mat']['xmin_mat'][:,n]!=-1)[0]
+            num_save_id = len(track_idx)
+            if num_save_id!=0:
+                save_mat = np.zeros((num_save_id, 12))
+                save_mat[:,0] = fr_idx-track_struct['track_params']['num_fr']+n
+                save_mat[:,1] = track_struct['tracklet_mat']['obj_id_mat'][track_idx]
+                track_struct['tracklet_mat']['save_obj_id_mask'][save_mat[:,1].astype(int)] = 1
+                save_mat[:,2] = track_struct['tracklet_mat']['track_id_mat'][track_idx]
+                save_mat[:,3] = track_struct['tracklet_mat']['xmin_mat'][track_idx,n]
+                save_mat[:,4] = track_struct['tracklet_mat']['ymin_mat'][track_idx,n]
+                save_mat[:,5] = track_struct['tracklet_mat']['xmax_mat'][track_idx,n] \
+                    -track_struct['tracklet_mat']['xmin_mat'][track_idx,n]
+                save_mat[:,6] = track_struct['tracklet_mat']['ymax_mat'][track_idx,n] \
+                    -track_struct['tracklet_mat']['ymin_mat'][track_idx,n]
+                save_mat[:,7] = track_struct['tracklet_mat']['x_3d_mat'][track_idx,n]
+                save_mat[:,8] = track_struct['tracklet_mat']['y_3d_mat'][track_idx,n]
+                save_mat[:,9] = track_struct['tracklet_mat']['w_3d_mat'][track_idx,n]
+                save_mat[:,10] = track_struct['tracklet_mat']['h_3d_mat'][track_idx,n]
+                save_mat[:,11] = track_struct['tracklet_mat']['det_score_mat'][track_idx,n]
+                f = open(track_struct['file_path']['txt_result_path'], 'a')  
+                np.savetxt(f, save_mat, delimiter=',')
+                f.close()
+                wrt_missing_det(save_mat)
+        
     #import pdb; pdb.set_trace()
-    
+    t_pointer = prev_t_pointer
     return
 
 def init_TC_tracker():
@@ -1667,7 +1784,7 @@ def init_TC_tracker():
     track_struct['file_path']['seq_name'] = '2011_09_26_drive_0091_sync'
     track_struct['file_path']['img_name'] = '2011_09_26_drive_0091_sync'
     track_struct['file_path']['sub_seq_name'] = ''
-    track_struct['file_path']['det_path'] = 'D:/Data/KITTI/'+track_struct['file_path']['seq_name']+'/disturb_gt_2.txt'
+    track_struct['file_path']['det_path'] = 'D:/Data/KITTI/'+track_struct['file_path']['seq_name']+'/dets2.txt'
     track_struct['file_path']['img_folder'] = 'D:/Data/KITTI/'+track_struct['file_path']['img_name'] \
         +track_struct['file_path']['sub_seq_name']+'/image_02/data'
     track_struct['file_path']['crop_det_folder'] = 'D:/Data/KITTI/temp_crop'
@@ -1679,6 +1796,8 @@ def init_TC_tracker():
         +track_struct['file_path']['sub_seq_name']+'.avi'
     track_struct['file_path']['txt_result_path'] = 'D:/Data/KITTI/txt_result/'+track_struct['file_path']['seq_name'] \
         +track_struct['file_path']['sub_seq_name']+'.txt'
+    if os.path.isfile(track_struct['file_path']['txt_result_path']):
+        os.remove(track_struct['file_path']['txt_result_path'])
     track_struct['file_path']['track_struct_path'] = 'D:/Data/KITTI/track_struct/'+track_struct['file_path']['seq_name'] \
         +track_struct['file_path']['sub_seq_name']+'.obj'
 
@@ -1744,6 +1863,9 @@ def init_TC_tracker():
     track_struct['tracklet_mat']['imgs'] = []
     track_struct['tracklet_mat']['color_table'] = track_lib.color_table(track_struct['track_params']['max_num_obj'])
     
+    # fr_id, track_id, xmin, ymin, xmax, ymax, x, y, w, h, det_score
+    track_struct['tracklet_mat']['obj_end_fr_info'] = -np.ones((track_struct['track_params']['max_num_obj'],11))
+    
     # remove folder
     if os.path.isdir(track_struct['file_path']['crop_det_folder']):
         shutil.rmtree(track_struct['file_path']['crop_det_folder'])
@@ -1764,16 +1886,17 @@ def TC_tracker():
     global tracklet_sess
     init_tracklet_model()
     
-    M = track_lib.load_detection(track_struct['file_path']['det_path'], 'KITTI_3d') 
+    M = track_lib.load_detection(track_struct['file_path']['det_path'], 'KITTI_3d_2') 
     total_num_fr = int(M[-1,0]-M[0,0]+1) 
     
     t_pointer = 0
     for n in range(total_num_fr):
         print("fr_idx %d" % n)
+        print("t_pointer %d" % t_pointer)
         fr_idx = n
         idx = np.where(np.logical_and(M[:,0]==fr_idx,M[:,5]>track_struct['track_params']['det_thresh']))[0]
         if len(idx)>1:
-            choose_idx, _ = track_lib.merge_bbox(M[idx,1:5], 0.3, M[idx,5])
+            choose_idx, _ = track_lib.merge_bbox(M[idx,1:5], 1, M[idx,5])
             #import pdb; pdb.set_trace()
             temp_M = M[idx[choose_idx],:]
         else:
@@ -1783,9 +1906,28 @@ def TC_tracker():
         img_path = track_struct['file_path']['img_folder']+'/'+img_name
         img = misc.imread(img_path) 
 
-        TC_online(temp_M, img, t_pointer, fr_idx)  
+        if fr_idx==total_num_fr-1:
+            end_flag = 1
+        else:
+            end_flag = 0
+            
+        TC_online(temp_M, img, t_pointer, fr_idx, end_flag)  
         t_pointer = t_pointer+1
         if t_pointer>track_struct['track_params']['num_fr']:
             t_pointer = track_struct['track_params']['num_fr']
-            
+    
+    # draw all results
+    M = np.loadtxt(track_struct['file_path']['txt_result_path'], delimiter=',')
+    M = np.array(M)
+    for n in range(total_num_fr):
+        fr_idx = n
+        img_name = track_lib.file_name(fr_idx,10)+'.png'
+        img_path = track_struct['file_path']['img_folder']+'/'+img_name
+        img = misc.imread(img_path) 
+        
+        temp_M = M[M[:,0]==fr_idx,:]
+        draw_result(img, temp_M, fr_idx)
+    
+    convert_frames_to_video(track_struct['file_path']['tracking_img_folder']+'/', track_struct['file_path']['tracking_video_path'], 20)
+    
     return track_struct
