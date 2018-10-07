@@ -32,6 +32,155 @@ from skimage.feature import match_descriptors, ORB, plot_matches
 from skimage.measure import ransac
 from skimage.transform import FundamentalMatrixTransform
 
+
+def remove_det(det_M, det_thresh, y_thresh, h_thresh):
+    
+    remove_idx = []
+    
+    # remove low det score
+    for n in range(len(det_M)):
+        if det_M[n,-1]<det_thresh:
+            remove_idx.append(n)
+            
+    # remove det upper the ground plane
+    for n in range(len(det_M)):
+        if det_M[n,2]<y_thresh:
+            remove_idx.append(n)
+            
+    # remove small object
+    for n in range(len(det_M)):
+        if det_M[n,4]<h_thresh:
+            remove_idx.append(n)
+            
+    remove_idx = np.array(list(set(remove_idx)),dtype=int)
+    new_M = det_M.copy()
+    new_M = np.delete(new_M,remove_idx,axis=0)
+    return new_M
+    
+def bbox_interp_with_F(F_set, start_fr, end_fr, start_bbox, end_bbox):
+    # bbox = [xmin,ymin,xmax,ymax]
+    
+    # initialize with linear interpolation
+    fr_range = np.array(range(start_fr,end_fr+1),dtype=int)
+    interp_bbox = np.zeros((end_fr-start_fr-1,4))
+    xmins = np.interp(fr_range,[start_fr,end_fr],[start_bbox[0],end_bbox[0]])
+    ymins = np.interp(fr_range,[start_fr,end_fr],[start_bbox[1],end_bbox[1]])
+    xmaxs = np.interp(fr_range,[start_fr,end_fr],[start_bbox[2],end_bbox[2]])
+    ymaxs = np.interp(fr_range,[start_fr,end_fr],[start_bbox[3],end_bbox[3]])
+    
+    N = len(xmins)-2
+    iters = 100
+    
+    for n in range(iters):
+        # forward update
+        for nn in range(N):
+            if n%2==0:
+                k = nn
+            else:
+                k = N-nn-1
+            fr_idx = fr_range[0]+k
+            F = F_set[:,:,fr_idx]
+            temp_pt = np.zeros((1,3))
+            temp_A = np.zeros((12,4))
+            temp_b = np.zeros((12,1))
+
+            if F[0,0]!=-1:    
+                temp_pt[0,:] = np.array([xmins[k],ymins[k],1])
+                A1 = np.matmul(temp_pt, np.transpose(F))
+                temp_A[0,0] = A1[0,0]
+                temp_A[0,1] = A1[0,1]
+                temp_b[0,0] = -A1[0,2]
+                
+                temp_pt[0,:] = np.array([xmaxs[k],ymins[k],1])
+                A2 = np.matmul(temp_pt, np.transpose(F))
+                temp_A[1,2] = A2[0,0]
+                temp_A[1,1] = A2[0,1]
+                temp_b[1,0] = -A2[0,2]
+        
+                temp_pt[0,:] = np.array([xmins[k],ymaxs[k],1])
+                A3 = np.matmul(temp_pt, np.transpose(F))
+                temp_A[2,0] = A3[0,0]
+                temp_A[2,3] = A3[0,1]
+                temp_b[2,0] = -A3[0,2]
+        
+                temp_pt[0,:] = np.array([xmaxs[k],ymaxs[k],1])
+                A4 = np.matmul(temp_pt, np.transpose(F))
+                temp_A[3,2] = A4[0,0]
+                temp_A[3,3] = A4[0,1]
+                temp_b[3,0] = -A4[0,2]
+            else:
+                temp_A[0,0] = 1
+                temp_b[0,0] = xmins[k]
+                temp_A[1,1] = 1
+                temp_b[1,0] = ymins[k]
+                temp_A[2,2] = 1
+                temp_b[2,0] = xmaxs[k]
+                temp_A[3,3] = 1
+                temp_b[3,0] = ymaxs[k]
+                
+            temp_A[4,0] = 1
+            temp_b[4,0] = xmins[k+1]
+            temp_A[5,1] = 1
+            temp_b[5,0] = ymins[k+1]
+            temp_A[6,2] = 1
+            temp_b[6,0] = xmaxs[k+1]
+            temp_A[7,3] = 1
+            temp_b[7,0] = ymaxs[k+1]
+            
+
+            F = F_set[:,:,fr_idx+1]
+            if F[0,0]!=-1:
+                temp_pt[0,:] = np.array([xmins[k+2],ymins[k+2],1])
+                A1 = np.matmul(temp_pt, F)
+                temp_A[8,0] = A1[0,0]
+                temp_A[8,1] = A1[0,1]
+                temp_b[8,0] = -A1[0,2]
+                
+                temp_pt[0,:] = np.array([xmaxs[k+2],ymins[k+2],1])
+                A2 = np.matmul(temp_pt, F)
+                temp_A[9,2] = A2[0,0]
+                temp_A[9,1] = A2[0,1]
+                temp_b[9,0] = -A2[0,2]
+        
+                temp_pt[0,:] = np.array([xmins[k+2],ymaxs[k+2],1])
+                A3 = np.matmul(temp_pt, F)
+                temp_A[10,0] = A3[0,0]
+                temp_A[10,3] = A3[0,1]
+                temp_b[10,0] = -A3[0,2]
+        
+                temp_pt[0,:] = np.array([xmaxs[k+2],ymaxs[k+2],1])
+                A4 = np.matmul(temp_pt, F)
+                temp_A[11,2] = A4[0,0]
+                temp_A[11,3] = A4[0,1]
+                temp_b[11,0] = -A4[0,2]
+            else:
+                temp_A[8,0] = 1
+                temp_b[8,0] = xmins[k+2]
+                temp_A[9,1] = 1
+                temp_b[9,0] = ymins[k+2]
+                temp_A[10,2] = 1
+                temp_b[10,0] = xmaxs[k+2]
+                temp_A[11,3] = 1
+                temp_b[11,0] = ymaxs[k+2]
+            
+            new_loc = np.matmul(np.linalg.pinv(temp_A),temp_b)
+            #if k==2:
+            #    import pdb; pdb.set_trace()
+            xmins[k+1] = new_loc[0,0]
+            ymins[k+1] = new_loc[1,0]
+            xmaxs[k+1] = new_loc[2,0]
+            ymaxs[k+1] = new_loc[3,0]
+        print(xmins)
+    
+    for n in range(len(interp_bbox)):
+        interp_bbox[n,0] = xmins[n+1]
+        interp_bbox[n,1] = ymins[n+1]
+        interp_bbox[n,2] = xmaxs[n+1]-xmins[n+1]+1
+        interp_bbox[n,3] = ymaxs[n+1]-ymins[n+1]+1
+        
+    return interp_bbox      
+                
+
 def check_bbox_near_img_bnd(bbox, img_size, margin):
     # img_size = [x,y]
     xmin = bbox[0,0]
@@ -62,6 +211,11 @@ def pred_bbox_by_F(bbox, F, show_flag, img1, img2):
         ax1.imshow(img1)
     
     pred_bbox = np.zeros((len(bbox),4))
+    
+    if F[0,0]==-1:
+        pred_bbox = bbox.copy()
+        return pred_bbox
+    
     for n in range(len(bbox)):
         xmin = bbox[n,0]
         ymin = bbox[n,1]
@@ -93,7 +247,7 @@ def pred_bbox_by_F(bbox, F, show_flag, img1, img2):
         h = bbox[n,3]
         
         temp_A = np.zeros((4,2))
-        temp_b = np.zeros((4,1));
+        temp_b = np.zeros((4,1))
         temp_pt = np.zeros((1,3))
         temp_pt[0,:] = np.array([xmin,ymin,1])
         A1 = np.matmul(temp_pt, np.transpose(F))
@@ -393,16 +547,16 @@ def load_detection(file_name, dataset):
         cnt = 0
         for n in range(len(f)):
             if mask[n,0]==1:
-                M[cnt,0] = int(float(f[n][0]))
+                M[cnt,0] = int(float(f[n][0]))+1
                 M[cnt,1] = int(float(f[n][1]))
                 M[cnt,2] = int(float(f[n][2]))
                 M[cnt,3] = int(float(f[n][3]))
                 M[cnt,4] = int(float(f[n][4]))
                 M[cnt,5] = float(f[n][10])/100.0
-                M[cnt,6] = float(f[n][5])
-                M[cnt,7] = float(f[n][7])
-                M[cnt,8] = float(f[n][8])
-                M[cnt,9] = float(f[n][9])
+                M[cnt,6] = float(f[n][5])/723.0
+                M[cnt,7] = float(f[n][7])/723.0
+                M[cnt,8] = float(f[n][8])/723.0
+                M[cnt,9] = float(f[n][9])/723.0
                 cnt = cnt+1
             #import pdb; pdb.set_trace()
         return M

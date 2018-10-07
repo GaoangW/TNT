@@ -32,8 +32,8 @@ from sklearn.datasets import make_classification
 import seq_nn_3d
 import track_lib
 
-seq_name = 'MOT17-12-FRCNN'
-img_name = 'MOT17-12'
+seq_name = 'MOT17-14-SDP'
+img_name = 'MOT17-14'
 sub_seq_name = ''
 det_path = 'D:/Data/MOT/MOT17Labels/test/'+seq_name+'/det/det.txt'
 img_folder = 'D:/Data/MOT/MOT17Det/test/'+img_name+sub_seq_name+'/img1'
@@ -46,8 +46,10 @@ seq_model = 'D:/Data/UA-Detrac/MOT_2d/model.ckpt'
 tracking_img_folder = 'D:/Data/MOT/tracking_img/'+seq_name+sub_seq_name
 tracking_video_path = 'D:/Data/MOT/tracking_video/'+seq_name+sub_seq_name+'.avi'
 svm_model_path = 'D:/Data/MOT/MOT17_train_det_crop/cnn_svm_MOT17.pkl'
-rand_forest_model_path = 'D:/Data/MOT/MOT17_train_det_crop/rand_forest_MOT17_FRCNN.pkl'
+rand_forest_model_path = 'D:/Data/MOT/MOT17_train_det_crop/rand_forest_MOT17_SDP.pkl'
 F_path = 'D:/Data/MOT/geometry_info/'+img_name+'_F_set.mat'
+
+appear_mat_path = 'D:/Data/MOT/appear_mat/'+seq_name+'.obj'
 
 save_fea_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'.obj'
 save_label_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_label.obj'
@@ -71,7 +73,8 @@ num_classes = 2
 
 
 track_set = []
-remove_set = []
+remove_set = [164]
+#remove_set = [639,650,669,709,744,752,762,863]
 
 
 #track_set = pickle.load(open(save_label_path,'rb'))
@@ -162,7 +165,7 @@ def preprocessing(tracklet_mat, len_thresh, track_params):
     for n in range(N_tracklet): 
         idx = np.where(new_tracklet_mat['xmin_mat'][n,:]!=-1)[0] 
         max_det_score = np.max(new_tracklet_mat['det_score_mat'][n,idx])
-        if len(idx)<len_thresh and max_det_score<0.8: 
+        if len(idx)<len_thresh:# and max_det_score<track_params['pre_det_score']: 
             remove_idx.append(n) 
             
     new_tracklet_mat['xmin_mat'] = np.delete(new_tracklet_mat['xmin_mat'], remove_idx, 0) 
@@ -234,7 +237,7 @@ def forward_tracking(track_id1, track_id2, bbox1, bbox2, det_score1, det_score2,
         # pred bbox1
         pred_bbox1 = np.zeros((len(bbox1),4))
         if track_params['use_F']==1:
-            pred_bbox1 = track_lib.pred_bbox_by_F(bbox1, tracklet_mat['F'][:,:,fr_idx2-2], 0)
+            pred_bbox1 = track_lib.pred_bbox_by_F(bbox1, tracklet_mat['F'][:,:,fr_idx2-2], 0, [], [])
         else:    
             for k in range(len(bbox1)):
                 temp_track_id = new_track_id1[k]-1
@@ -2248,7 +2251,9 @@ def TC_tracker():
     track_struct['track_params']['num_fr'] = int(np.max(M[:,0])-np.min(M[:,0])+1) 
     track_struct['track_params']['IOU_thresh'] = 0.5 
     track_struct['track_params']['color_thresh'] = 0.05
-    track_struct['track_params']['det_thresh'] = -2 
+    track_struct['track_params']['det_thresh'] = 0.5 
+    track_struct['track_params']['det_y_thresh'] = 460
+    track_struct['track_params']['det_h_thresh'] = 53
     track_struct['track_params']['linear_pred_thresh'] = 5 
     track_struct['track_params']['t_dist_thresh'] = 45 
     track_struct['track_params']['track_overlap_thresh'] = 0.1 
@@ -2256,6 +2261,9 @@ def TC_tracker():
     track_struct['track_params']['const_fr_thresh'] = 1 
     track_struct['track_params']['crop_size'] = 182 
     track_struct['track_params']['time_cluster_dist'] = 100
+    track_struct['track_params']['merge_IOU'] = 0.7
+    track_struct['track_params']['pre_len'] = 1
+    track_struct['track_params']['pre_det_score'] = 0.8
     track_struct['track_params']['svm_score_flag'] = 0
     track_struct['track_params']['h_score_flag'] = 0
     track_struct['track_params']['y_score_flag'] = 0
@@ -2292,11 +2300,21 @@ def TC_tracker():
         fr_idx = n+1
         idx = np.where(np.logical_and(M[:,0]==fr_idx,M[:,5]>track_struct['track_params']['det_thresh']))[0]
         if len(idx)>1:
-            choose_idx, _ = track_lib.merge_bbox(M[idx,1:5], 0.7, M[idx,5])
+            choose_idx, _ = track_lib.merge_bbox(M[idx,1:5], track_struct['track_params']['merge_IOU'], M[idx,5])
             #import pdb; pdb.set_trace()
-            temp_M = M[idx[choose_idx],:]
+            temp_M = np.zeros((len(choose_idx),M.shape[1]))
+            temp_M[:,:] = M[idx[choose_idx],:]
+        elif len(idx)==1:
+            temp_M = np.zeros((1,M.shape[1]))
+            temp_M[0,:] = M[idx,:]
         else:
-            temp_M = M[idx,:]
+            temp_M = []
+        
+        if len(temp_M)!=0:
+            temp_M = track_lib.remove_det(temp_M, track_struct['track_params']['det_thresh'], 
+                                          track_struct['track_params']['det_y_thresh'], 
+                                         track_struct['track_params']['det_h_thresh'])
+            
         num_bbox = len(temp_M)
         
         img_name = track_lib.file_name(fr_idx,6)+'.jpg'
@@ -2422,20 +2440,22 @@ def TC_tracker():
     
     # tracklet clustering
     iters = 20
-    track_struct['tracklet_mat'] = preprocessing(track_struct['tracklet_mat'], 3, track_struct['track_params'])
+    track_struct['tracklet_mat'] = preprocessing(track_struct['tracklet_mat'], track_struct['track_params']['pre_len'],
+                                                 track_struct['track_params'])
     
     #import pdb; pdb.set_trace()
     #pickle.dump(track_struct, open(track_struct_path,'wb'))
     #return track_struct
     
-    '''
+    
     # remove large bbox
+    '''
     #import pdb; pdb.set_trace()
     for n in range(len(track_struct['tracklet_mat']['xmin_mat'])):
         cand_t = np.where(track_struct['tracklet_mat']['xmin_mat'][n,:]!=-1)[0]
         temp_h = track_struct['tracklet_mat']['ymax_mat'][n,cand_t]-track_struct['tracklet_mat']['ymin_mat'][n,cand_t]
-        max_h = np.max(temp_h)
-        if max_h>400:
+        min_h = np.min(temp_h)
+        if min_h<150:
             remove_set.append(n)
     '''
     
@@ -2447,9 +2467,13 @@ def TC_tracker():
     
     track_struct['tracklet_mat']['appearance_fea_mat'] = feature_extract(feature_size, num_patch, max_length, 
                                                                      crop_det_folder, triplet_model)
+    
+    # remove set 
+    '''
     get_tracklet_scores()
     temp_remove_set = remove_tracklet(track_struct['tracklet_mat'])
     remove_set.extend(temp_remove_set)
+    '''
     
     #import pdb; pdb.set_trace()
     #*******************
@@ -2459,7 +2483,8 @@ def TC_tracker():
                                                                 len(track_struct['tracklet_mat']['xmin_mat'])))
     track_struct['tracklet_mat']['comb_track_cost_mask'] = np.zeros((len(track_struct['tracklet_mat']['xmin_mat']),
                                                                 len(track_struct['tracklet_mat']['xmin_mat'])))
-
+    
+    pickle.dump(track_struct['tracklet_mat']['appearance_fea_mat'], open(appear_mat_path, 'wb'))
     #import pdb; pdb.set_trace()
 
     # load nn
