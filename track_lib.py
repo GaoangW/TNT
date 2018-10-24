@@ -33,6 +33,40 @@ from skimage.measure import ransac
 from skimage.transform import FundamentalMatrixTransform
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel
+from skimage.feature import hog
+from skimage import color
+
+
+def extract_hist(img_patch):
+    '''
+    # hog, 5*3 blocks
+    patch_size = img_patch.shape
+    fd, _ = hog(img_patch, orientations=8, pixels_per_cell=(int(patch_size[0]/5), int(patch_size[1]/3)),
+                    cells_per_block=(1, 1), visualize=True, multichannel=True)
+    '''
+    # color hist: 4*2 blocks, 16 bins, R,G,B,gray, 4 channels
+    num_block = [4,2]
+    n_bins = 16
+    fea = np.zeros(512)
+    patch_size = img_patch.shape
+    block_size = [int(patch_size[0]/num_block[0]),int(patch_size[1]/num_block[1])]
+    gray_img = color.rgb2gray(img_patch)
+    cnt = 0
+    for n1 in range(num_block[0]):
+        for n2 in range(num_block[1]):
+            #block_img = np.zeros((block_size[0],block_size[1],4))
+            #block_img[:,:,0:3] = img_patch[n1*block_size[0]:(n1+1)*block_size[0],n2*block_size[1]:(n2+1)*block_size[1],:]/255.0
+            #block_img[:,:,3] = gray_img[n1*block_size[0]:(n1+1)*block_size[0],n2*block_size[1]:(n2+1)*block_size[1]]
+            block_img = np.zeros((patch_size[0],patch_size[1],4))
+            block_img[:,:,0:3] = img_patch/255.0
+            block_img[:,:,3] = gray_img
+            for k in range(4):
+                fea[cnt*n_bins:(cnt+1)*n_bins],_ = np.histogram(block_img[:,:,k], bins=n_bins, range=(0,1), density=True)
+                #import pdb; pdb.set_trace()
+                cnt = cnt+1
+    
+    fea = fea/np.linalg.norm(fea)
+    return fea
 
 def GP_regression(tr_x,tr_y,test_x):
     A = np.ones((len(tr_x),2))
@@ -317,7 +351,7 @@ def check_bbox_near_img_bnd(bbox, img_size, margin):
     
     return check_flag
 
-def remove_det(det_M, det_thresh, y_thresh, h_thresh, y_thresh2, ratio_1, h_thresh2):
+def remove_det(det_M, det_thresh, y_thresh, h_thresh, y_thresh2, ratio_1, h_thresh2, y_thresh3, y_thresh4):
     
     remove_idx = []
     
@@ -349,6 +383,16 @@ def remove_det(det_M, det_thresh, y_thresh, h_thresh, y_thresh2, ratio_1, h_thre
     # remove large object
     for n in range(len(det_M)):
         if det_M[n,4]>h_thresh2:
+            remove_idx.append(n)
+    
+    # remove ymax
+    for n in range(len(det_M)):
+        if det_M[n,2]+det_M[n,4]>y_thresh3:
+            remove_idx.append(n)
+            
+    # remove ymax
+    for n in range(len(det_M)):
+        if det_M[n,2]+det_M[n,4]<y_thresh4:
             remove_idx.append(n)
             
     remove_idx = np.array(list(set(remove_idx)),dtype=int)
