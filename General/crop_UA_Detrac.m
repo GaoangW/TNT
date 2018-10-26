@@ -1,5 +1,11 @@
 function crop_UA_Detrac(gt_path, seq_name, img_folder, img_format, save_folder)
 
+% gt_path: gtInfo.mat, X,Y,W,H
+% seq_name: name of the sequence
+% img_folder: input image dir
+% img_format: input image format, etc, png, jpg
+% save_folder: cropped image dir
+
 load(gt_path)
 margin_scale = 0.15;
 resize_size = 182;
