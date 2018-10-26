@@ -1,0 +1,5 @@
+python src/validate_on_lfw.py D:/Code/update_facenet/facenet-master/facenet-master/datasets/lfw/align_img D:/Code/update_facenet/facenet-master/20180402-114759/20180402-114759 --distance_metric 1 --use_flipped_images --subtract_mean --use_fixed_image_standardization
+
+python src/validate_on_lfw.py D:/Code/update_facenet/facenet-master/facenet-master/datasets/lfw/align_img C:\Users\gaoan\models\facenet\20180626-134545 --distance_metric 0 --use_flipped_images --subtract_mean --use_fixed_image_standardization
+
+python src/train_tripletloss.py --logs_base_dir ~/logs/facenet/ --models_base_dir ~/models/facenet/ --data_dir D:/Code/update_facenet/facenet-master/facenet-master/datasets/lfw/align_img --image_size 160 --model_def models.inception_resnet_v1 --lfw_dir D:/Code/update_facenet/facenet-master/facenet-master/datasets/lfw/align_img --optimizer RMSPROP --learning_rate 0.01 --weight_decay 1e-4 --max_nrof_epochs 500 --pretrained_model D:/Code/update_facenet/facenet-master/20180408-102900/20180408-102900/model-20180408-102900.ckpt-90 --embedding_size 512 --batch_size 30 --people_per_batch 15 --images_per_person 10 --epoch_size 100 --learning_rate 0.0001
