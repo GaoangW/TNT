@@ -29,6 +29,7 @@ MAT_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/gt_mat'
 img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17Det/train'
 temp_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/temp'
 triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/update_facenet/UA_Detrac_model/MOT'
+save_dir = 'C:/Users/tangz/OneDrive/Documents/Gaoang/RNN/MOT_2d/model.ckpt'
 bbox_size = 182
 max_length = 64
 feature_size = 4+512
@@ -525,9 +526,10 @@ saver = tf.train.Saver()
 
 with tf.Session() as sess:
     sess.run(init)
-
-    saver.restore(sess, "C:/Users/tangz/OneDrive/Documents/Gaoang/RNN/MOT_2d/model.ckpt")
-    print("Model restored.")
+    
+    if os.path.isfile(save_dir)==True:
+        saver.restore(sess, save_dir)
+        print("Model restored.")
     
     cnt = 0
     for i in range(2000000):
