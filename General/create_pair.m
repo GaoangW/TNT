@@ -1,5 +1,8 @@
 function create_pair(dataset_dir, save_dir, num_pair, n_fold)
-
+% dataset_dir: cropped image dir
+% save_dir: output dir
+% num_pair: number of pairs for each fold
+% n_fold: the number of folds
 class_list = dir(dataset_dir);
 class_list(1:2) = [];
 classNum = length(class_list);
