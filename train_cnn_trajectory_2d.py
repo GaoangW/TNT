@@ -16,7 +16,6 @@ from scipy.optimize import brentq
 from scipy import interpolate
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
-from scipy import spatial
 import matplotlib.pyplot as plt
 import seq_nn_3d_v2
 import random
@@ -144,7 +143,7 @@ def evaluate(sess, enqueue_op, image_paths_placeholder, labels_placeholder, phas
     #np.savetxt("emb_array.csv", emb_array, delimiter=",")
     return emb_array
     
-def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thresh):
+def split_track(X_2d,Y_2d,W_2d,H_2d,img_size,obj_id,noise_scale,connect_thresh):
     
     err_flag = 0
     part_W_mat = W_2d[:,obj_id]
@@ -160,11 +159,13 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
     bbox_tracklet = []
     bbox_num = []
             
-    v_flag = 1
+    v_flag = 0
+    V_2d = []
+    '''
     rand_num = random.uniform(0.0,1.0)
     if rand_num<0.8:   # 0.5
         v_flag = 0
-                
+    '''            
     for k in range(st_fr, end_fr+1):
         rand_num = np.zeros((1,4))
         for kk in range(4):
@@ -252,14 +253,14 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
         Y_2d = Mat_files[n]['gtInfo'][0][0][1]
         W_2d = Mat_files[n]['gtInfo'][0][0][2]
         H_2d = Mat_files[n]['gtInfo'][0][0][3]
-        V_2d = Mat_files[n]['gtInfo'][0][0][4]
+        #V_2d = Mat_files[n]['gtInfo'][0][0][4]
         img_size = Mat_files[n]['gtInfo'][0][0][5][0]
         #import pdb; pdb.set_trace()
         
         while 1:
             obj_id = np.random.randint(id_num, size=1)[0]
             
-            bbox_tracklet, t_interval, err_flag = split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thresh)
+            bbox_tracklet, t_interval, err_flag = split_track(X_2d,Y_2d,W_2d,H_2d,img_size,obj_id,noise_scale,connect_thresh)
             if err_flag==1:
                 continue
                 
