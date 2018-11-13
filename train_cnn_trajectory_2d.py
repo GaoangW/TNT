@@ -223,7 +223,7 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,img_size,obj_id,noise_scale,connect_thresh):
 def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
 
     noise_scale = 0.15
-    connect_thresh = 0.9
+    connect_thresh = random.uniform(0.9,1.0)
     sample_p = np.array([0.0852,0.1996,0.2550,0.0313,0.0854,0.1546,0.1890])
     sample_p = list(sample_p/sum(sample_p))
     
