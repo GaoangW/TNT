@@ -611,7 +611,6 @@ with tf.Session() as sess:
         
         # shuffle 4 times
         acc = []
-        acc2 = []
         for kk in range(num_batch):
             temp_batch_size = batch_size
             if kk==num_batch-1:
@@ -649,28 +648,6 @@ with tf.Session() as sess:
                                                           keep_prob: 1.0})
                 import pdb; pdb.set_trace()
                 '''
-                temp_acc = 0
-                for nn in range(len(ap)):
-                    idx1 = np.where(mask_1[nn,0,:,0]==1)[0]
-                    idx2 = np.where(mask_1[nn,0,:,1]==1)[0]
-                    X1 = np.zeros((len(idx1),512))
-                    X2 = np.zeros((len(idx2),512))
-                    #import pdb; pdb.set_trace()
-                    X1[:,:] = ap[nn,:,idx1,0]
-                    X2[:,:] = ap[nn,:,idx2,0]
-                    pair_cost = spatial.distance.cdist(X1, X2, 'euclidean')
-                    min_cost = np.min(pair_cost)
-                    if min_cost<7:
-                        pred_l = 1
-                    else:
-                        pred_l = 0
-                    if batch_y[nn,0]==1:
-                        true_l = 1
-                    else:
-                        true_l = 0
-                    if pred_l==true_l:
-                        temp_acc = temp_acc+1
-                acc2.append(temp_acc/(len(ap)))
                             
                 train_accuracy = accuracy.eval(feed_dict={batch_X_x: x,
                                                           batch_X_y: y,
@@ -711,8 +688,6 @@ with tf.Session() as sess:
             
         acc = np.array(acc)
         print(np.mean(acc))
-        acc2 = np.array(acc2)
-        print(np.mean(acc2))
             
         if cnt % 100 == 0:
             save_path = saver.save(sess, save_dir)
