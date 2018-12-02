@@ -1,4 +1,12 @@
 # TNT
+Environment setting is follows. <br />
+Operating system: windows, need to change (from scipy.io import loadmat) to (h5py) in Linux. <br />
+Python: 3.5.4 <br />
+tensorflow: 1.4.0 <br />
+cuda: 8.0 <br />
+cudnn: 5.1.10 <br />
+opencv: 3.2.0 <br />
+Other packages: numpy, pickle, sklearn, scipy, matplotlib, PIL. <br />
 # 2D Tracking Training
 1. Prepare the Data. <br />
 Ground truth tracking file: follow the format of MOT (https://motchallenge.net/). <br />
