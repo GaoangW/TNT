@@ -1,4 +1,4 @@
-# TC_CNN
+# TNT
 # Training 2D Tracking
 1. Prepare the Data. <br />
 Ground truth tracking file: follow the format of MOT (https://motchallenge.net/). <br />
