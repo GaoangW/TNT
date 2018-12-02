@@ -1,6 +1,6 @@
 # TNT
 Environment setting is follows. <br />
-Operating system: windows, need to change (from scipy.io import loadmat) to (h5py) in Linux. <br />
+Operating system: windows, need to change (from scipy.io import loadmat in TNT/train_cnn_trajectory_2d.py) to (h5py) in Linux. <br />
 Python: 3.5.4 <br />
 tensorflow: 1.4.0 <br />
 cuda: 8.0 <br />
