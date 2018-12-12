@@ -36,6 +36,144 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel
 from skimage.feature import hog
 from skimage import color
 
+def localization3D_by_bbox(xmin,ymin,xmax,ymax,K,R_set,t_set):
+    lambda1 = 1
+    lambda2 = 5
+    lambda3 = 1
+    lambda4 = 1
+    lambda5 = 0.01
+    
+    T = len(R_set)
+    x = []
+    for n in range(T):
+        temp_x = []
+        pt = np.zeros((3,1))
+        pt[:,0] = np.array([xmin[n],ymin[n],1])
+        temp_x.append(pt.copy())
+        pt[:,0] = np.array([xmax[n],ymin[n],1])
+        temp_x.append(pt.copy())
+        pt[:,0] = np.array([xmin[n],ymax[n],1])
+        temp_x.append(pt.copy())
+        pt[:,0] = np.array([xmax[n],ymax[n],1])
+        temp_x.append(pt.copy())
+        x.append(temp_x.copy())
+    
+    # f = lambda1||AX||+lambda2||CX-b||+lambda3||UX||
+    
+    X = np.zeros((3*4*T+T,1))
+    A = np.zeros((3*4*(T-1),3*4*T+T))
+    C = np.zeros((3*4*T,3*4*T+T))
+    
+    #X = np.zeros((4*4*T,1)) # X = [X;s], KRX+Kt=s[x,y,1]
+    #A = np.zeros((3*4*(T-1),4*4*T))
+    #C = np.zeros((3*4*T,4*4*T))
+    b = np.zeros((3*4*T,1))
+    U = np.zeros((4*T,4*4*T))
+    D = np.zeros((4*T,4*4*T))
+    d = np.ones((4*T,1))
+    B = np.zeros((6*T,4*4*T))
+    e = np.zeros((6*T,1))
+    
+    for n in range(4*(T-1)):
+        A[n*3:n*3+3,n*3:n*3+3] = -np.identity(3)
+        A[n*3:n*3+3,n*3+12:n*3+15] = np.identity(3)
+        #A[n*3:n*3+3,n*12:n*12+3] = R_set[n]
+        #A[n*3:n*3+3,n*12+9:n*12+12] = -R_set[n]
+        #A[n*3:n*3+3,n*12+12:n*12+15] = -R_set[n+1]
+        #A[n*3:n*3+3,n*12+21:n*12+24] = R_set[n+1]
+        
+    for n in range(T):
+        C[n*12:n*12+3,n*12:n*12+3] = np.matmul(K,R_set[n])
+        C[n*12+3:n*12+6,n*12+3:n*12+6] = np.matmul(K,R_set[n])
+        C[n*12+6:n*12+9,n*12+6:n*12+9] = np.matmul(K,R_set[n])
+        C[n*12+9:n*12+12,n*12+9:n*12+12] = np.matmul(K,R_set[n])
+        
+        C[n*12:n*12+3,T*12+n] = -x[n][0][:,0]
+        C[n*12+3:n*12+6,T*12+n] = -x[n][1][:,0]
+        C[n*12+6:n*12+9,T*12+n] = -x[n][2][:,0]
+        C[n*12+9:n*12+12,T*12+n] = -x[n][3][:,0]
+        
+        #C[n*12:n*12+3,T*12+4*n] = -x[n][0][:,0]
+        #C[n*12+3:n*12+6,T*12+4*n+1] = -x[n][1][:,0]
+        #C[n*12+6:n*12+9,T*12+4*n+2] = -x[n][2][:,0]
+        #C[n*12+9:n*12+12,T*12+4*n+3] = -x[n][3][:,0]
+    
+    for n in range(T):
+        B[6*n:6*n+3,12*n:12*n+3] = -R_set[n]
+        B[6*n:6*n+3,12*n+3:12*n+6] = R_set[n]
+        B[6*n+3:6*n+6,12*n+6:12*n+9] = -R_set[n]
+        B[6*n+3:6*n+6,12*n+9:12*n+12] = R_set[n]
+    
+    for n in range(T):
+        e[6*n,0] = 0.05
+        e[6*n+3,0] = 0.05
+        
+    for n in range(T):
+        temp_b = -np.matmul(K,t_set[n])
+        b[n*12:n*12+3,0] = temp_b[:,0].copy()
+        temp_b = -np.matmul(K,t_set[n])
+        b[n*12+3:n*12+6,0] = temp_b[:,0].copy()
+        temp_b = -np.matmul(K,t_set[n])
+        b[n*12+6:n*12+9,0] = temp_b[:,0].copy()
+        temp_b = -np.matmul(K,t_set[n])
+        b[n*12+9:n*12+12,0] = temp_b[:,0].copy()
+    
+    for n in range(T):
+        U[4*n,12*n+2] = 1
+        U[4*n,12*n+5] = -1
+        U[4*n+1,12*n+5] = 1
+        U[4*n+1,12*n+8] = -1
+        U[4*n+2,12*n+8] = 1
+        U[4*n+2,12*n+11] = -1
+        U[4*n+3,12*n+11] = 1
+        U[4*n+3,12*n+2] = -1
+        temp_R = np.zeros((12,12))
+        temp_R[0:3,0:3] = R_set[n]
+        temp_R[3:6,3:6] = R_set[n]
+        temp_R[6:9,6:9] = R_set[n]
+        temp_R[9:12,9:12] = R_set[n]
+        U[4*n:4*n+4,12*n:12*n+12] = np.matmul(U[4*n:4*n+4,12*n:12*n+12],temp_R.copy())
+    
+    D[:,12*T:] = np.identity(4*T)
+    M = np.concatenate((lambda1*A,lambda2*C),axis=0)
+    #M = np.concatenate((M,lambda3*U),axis=0)
+    #M = np.concatenate((M,lambda4*D),axis=0)
+    #M = np.concatenate((M,lambda5*B),axis=0)
+    p = np.concatenate((lambda1*np.zeros((3*4*(T-1),1)),lambda2*b),axis=0)
+    #p = np.concatenate((p,lambda3*np.zeros((4*T,1))),axis=0)
+    #p = np.concatenate((p,lambda4*d),axis=0)
+    #p = np.concatenate((p,lambda5*e),axis=0)
+    
+    X = np.matmul(np.linalg.pinv(M),p)
+    X_center = np.zeros((4,T))
+    '''
+    for n in range(T):
+        X_center[0,n] = (X[12*n]+X[12*n+3]+X[12*n+6]+X[12*n+9])/4
+        X_center[1,n] = (X[12*n+1]+X[12*n+4]+X[12*n+7]+X[12*n+10])/4
+        X_center[2,n] = (X[12*n+2]+X[12*n+5]+X[12*n+8]+X[12*n+11])/4
+        X_center[3,n] = (X[12*T+4*n]+X[12*T+4*n+1]+X[12*T+4*n+2]+X[12*T+4*n+3])/4
+    '''    
+    #import pdb; pdb.set_trace()
+    #aa=np.matmul(K,np.matmul(R_set[0],X[0:3])+t_set[0])
+    return X, X_center
+
+def interp_batch(total_batch_x):
+    interp_batch_x = total_batch_x.copy()
+    N_batch = total_batch_x.shape[0]
+    for n in range(N_batch):
+        temp_idx = np.where(total_batch_x[n,0,:,1]==1)[0]
+        t1 = int(temp_idx[-1])
+        temp_idx = np.where(total_batch_x[n,0,:,2]==1)[0]
+        t2 = int(temp_idx[0])
+        if t2-t1<=1:
+            continue
+        interp_t = np.array(range(t1+1,t2))
+        for k in range(total_batch_x.shape[1]):
+            temp_std = np.std(total_batch_x[n,k,total_batch_x[n,k,:,0]!=0,0])
+            x_p = [t1,t2]
+            f_p = [total_batch_x[n,k,t1,0],total_batch_x[n,k,t2,0]]
+            interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)#+np.random.normal(0, temp_std, t2-t1-1)
+    return interp_batch_x
 
 def extract_hist(img_patch):
     '''
@@ -887,6 +1025,20 @@ def load_detection(file_name, dataset):
                 M[cnt,9] = float(f[n][9])
                 cnt = cnt+1
             #import pdb; pdb.set_trace()
+        return M
+    if dataset=='YOLO':
+        f = np.loadtxt(file_name, dtype=str, delimiter=',')
+        f = np.array(f)
+        M = np.zeros((f.shape[0], 6))
+        cnt = 0
+        for n in range(len(f)):
+            M[cnt,0] = int(float(f[n][0]))+1
+            M[cnt,1] = int(float(f[n][2]))
+            M[cnt,2] = int(float(f[n][3]))
+            M[cnt,3] = int(float(f[n][4]))
+            M[cnt,4] = int(float(f[n][5]))
+            M[cnt,5] = float(f[n][6])/100.0
+            cnt = cnt+1
         return M
     
 def bbox_associate(overlap_mat, IOU_thresh): 
