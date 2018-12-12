@@ -33,28 +33,31 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.datasets import make_classification
 from collections import Counter
 
-import seq_nn_3d
+import seq_nn_3d_v2
 import track_lib
 
-'''
-seq_name = 'kitti_short_test_frames'
-img_name = 'kitti_short_test_frames'
-sub_seq_name = ''
 
-det_path = 'D:/Data/basketball_6943_results/kitti_short_test/kitti_short_test_bbstream.txt'
-img_folder = 'D:/Data/basketball_6943_results/kitti_short_test_frames'
+# Set paths
+seq_name = 'basketball_6943'
+img_name = 'basketball_6943'
+sub_seq_name = ''
+file_len = 8
+
+det_path = 'D:/Data/basketball_6943_results/det.txt'
+gt_path = ''
+img_folder = 'D:/Data/basketball_6943_results/img'
 crop_det_folder = 'D:/Data/basketball_6943_results/crop_det/'+seq_name+sub_seq_name
 triplet_model = 'D:/Data/UA-Detrac/UA_Detrac_model/MOT'
-seq_model = 'D:/Data/UA-Detrac/MOT_2d/model.ckpt'
+seq_model = 'D:/Data/MOT/MOT_2d_v2/model.ckpt'
 tracking_img_folder = 'D:/Data/basketball_6943_results/tracking_img/'+seq_name+sub_seq_name
 tracking_video_path = 'D:/Data/basketball_6943_results/tracking_video/'+seq_name+sub_seq_name+'.avi'
 appear_mat_path = 'D:/Data/basketball_6943_results/appear_mat/'+seq_name+'.obj'
 txt_result_path = 'D:/Data/basketball_6943_results/txt_result/'+seq_name+sub_seq_name+'.txt'
 track_struct_path = 'D:/Data/basketball_6943_results/track_struct/'+seq_name+sub_seq_name+'.obj'
-'''
 
-seq_name = 'MOT17-13-FRCNN'
-img_name = 'MOT17-13'
+'''
+seq_name = 'MOT17-02-FRCNN'
+img_name = 'MOT17-02'
 sub_seq_name = ''
 det_path = 'D:/Data/MOT/MOT17Labels/train/'+seq_name+'/det/det.txt'
 gt_path = 'D:/Data/MOT/MOT17Labels/train/'+seq_name+'/gt/gt.txt'
@@ -64,7 +67,7 @@ triplet_model = 'D:/Data/UA-Detrac/UA_Detrac_model/MOT'
 #triplet_model = 'D:/Data/UA-Detrac/UA_Detrac_model/KITTI_model'
 #seq_model = 'D:/Data/UA-Detrac/cnn_appear_model_517_128_16600steps/model.ckpt'
 #seq_model = 'D:/Data/UA-Detrac/cnn_MOT/model.ckpt'
-seq_model = 'D:/Data/UA-Detrac/MOT_2d/model.ckpt'
+seq_model = 'D:/Data/UA-Detrac/MOT_2d_v2/model.ckpt'
 #seq_model = 'D:/Data/UA-Detrac/semi_train_model/model.ckpt'
 tracking_img_folder = 'D:/Data/MOT/tracking_img/'+seq_name+sub_seq_name
 tracking_video_path = 'D:/Data/MOT/tracking_video/'+seq_name+sub_seq_name+'.avi'
@@ -87,7 +90,7 @@ save_all_label_path4 = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all_l
 
 txt_result_path = 'D:/Data/MOT/txt_result/'+seq_name+sub_seq_name+'.txt'
 track_struct_path = 'D:/Data/MOT/track_struct/'+seq_name+sub_seq_name+'.obj'
-
+'''
 
 max_length = 64
 feature_size = 4+512
@@ -97,7 +100,6 @@ num_classes = 2
 
 track_set = []
 remove_set = []
-#remove_set = [639,650,669,709,744,752,762,863]
 
 
 #track_set = pickle.load(open(save_label_path,'rb'))
@@ -632,7 +634,10 @@ def init_clustering():
     # cluster cost
     track_struct['tracklet_mat']['cluster_cost'] = []
     for n in range(N_tracklet):
-        track_struct['tracklet_mat']['cluster_cost'].append(0)
+        #track_struct['tracklet_mat']['cluster_cost'].append(0)
+        # bias term
+        #***************************************
+        track_struct['tracklet_mat']['cluster_cost'].append(track_struct['track_params']['cost_bias'])
 
     # save all comb cost for two tracklets
     # comb_track_cost [track_id1, track_id2, cost]
@@ -858,8 +863,12 @@ def comb_cost(tracklet_set, feature_size, max_length, img_size, sess,
                 cost = cost+min_cost-7
                 tracklet_mat['comb_track_cost_mask'][temp_cost_list[n][0],temp_cost_list[n][1]] = 1
                 tracklet_mat['comb_track_cost'][temp_cost_list[n][0],temp_cost_list[n][1]] = min_cost-7
-            cost = cost+track_struct['track_params']['cost_bias']*len(sort_idx)
+            #cost = cost+track_struct['track_params']['cost_bias']*len(sort_idx)
             return cost
+        
+        #*************************************
+        comb_fea_mat = track_lib.interp_batch(comb_fea_mat)
+        #*************************************
         
         max_batch_size = 16
         num_batch = int(np.ceil(comb_fea_mat.shape[0]/max_batch_size))
@@ -933,7 +942,7 @@ def comb_cost(tracklet_set, feature_size, max_length, img_size, sess,
         #comb_track_cost_list = comb_track_cost_list+temp_cost_list
         #print(np.sum(tracklet_mat['comb_track_cost_mask']))
         
-    cost = cost+track_struct['track_params']['cost_bias']*len(sort_idx)
+    #cost = cost+track_struct['track_params']['cost_bias']*len(sort_idx)
     return cost
 
 def get_split_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w, batch_X_h, 
@@ -1003,6 +1012,14 @@ def get_split_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w, ba
                                                             batch_X_h, batch_X_a, batch_mask_1, batch_mask_2, 
                                                             batch_Y, keep_prob, y_conv)
     '''
+    
+    # bias cost
+    #*************************************
+    new_cluster_cost[0,0] = track_struct['track_params']['cost_bias']
+    new_cluster_cost[1,0] = new_cluster_cost[1,0]+track_struct['track_params']['cost_bias']
+    
+    
+    #*************************************
     cost = np.sum(new_cluster_cost)-cross_cost[1,0]
     prev_cost = tracklet_mat['cluster_cost'][tracklet_mat['track_class'][track_id]]-cross_cost[0,0]
     diff_cost = cost-prev_cost
@@ -1121,7 +1138,8 @@ def get_assign_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w,
             '''        
                 
 
-    cost_vec = temp_new_cluster_cost[:,0]+new_cluster_cost[0,0]-cross_cost_vec[:,1]
+    new_cluster_cost[0,0] = new_cluster_cost[0,0]+track_struct['track_params']['cost_bias']
+    cost_vec = temp_new_cluster_cost[:,0]+track_struct['track_params']['cost_bias']+new_cluster_cost[0,0]-cross_cost_vec[:,1]
     prev_cost_vec = prev_cost_vec[:,0]-cross_cost_vec[:,0]
     
     diff_cost_vec = cost_vec-prev_cost_vec
@@ -1135,7 +1153,7 @@ def get_assign_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w,
         return diff_cost,new_cluster_cost,new_cluster_set,change_cluster_idx
 
     diff_cost = diff_cost_vec[min_idx]
-    new_cluster_cost[1,0] = temp_new_cluster_cost[min_idx,0]
+    new_cluster_cost[1,0] = temp_new_cluster_cost[min_idx,0]+track_struct['track_params']['cost_bias']
     change_cluster_idx = [tracklet_mat['track_class'][track_id],min_idx]
     temp_set = tracklet_mat['track_cluster'][min_idx].copy()
     temp_set.append(track_id)
@@ -1240,9 +1258,9 @@ def get_merge_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w, ba
         change_cluster_idx = []
         return diff_cost,new_cluster_cost,new_cluster_set,change_cluster_idx
 
-    diff_cost = diff_cost_vec[min_idx]
+    diff_cost = diff_cost_vec[min_idx]+track_struct['track_params']['cost_bias']
     new_cluster_cost = np.zeros((2,1))
-    new_cluster_cost[0,0] = cost
+    new_cluster_cost[0,0] = cost+track_struct['track_params']['cost_bias']
     change_cluster_idx = [tracklet_mat['track_class'][track_id], min_idx]
     new_cluster_set = []
     temp_set = cluster1.copy()
@@ -1429,8 +1447,9 @@ def get_switch_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w, b
 
     diff_cost = diff_cost_vec[min_idx]
     new_cluster_cost = np.zeros((2,1))
-    new_cluster_cost[0,0] = new_cluster_cost_vec1[min_idx,0]
-    new_cluster_cost[1,0] = new_cluster_cost_vec2[min_idx,0]
+    new_cluster_cost[0,0] = new_cluster_cost_vec1[min_idx,0]+track_struct['track_params']['cost_bias']
+    new_cluster_cost[1,0] = new_cluster_cost_vec2[min_idx,0]+track_struct['track_params']['cost_bias']
+    diff_cost = diff_cost+2*track_struct['track_params']['cost_bias']
 
     change_cluster_idx = [tracklet_mat['track_class'][track_id], min_idx]
     new_cluster_set = []
@@ -1506,6 +1525,7 @@ def get_break_cost(track_id, sess, img_size, batch_X_x, batch_X_y, batch_X_w, ba
                                                         y_conv)
     #tracklet_mat['comb_track_cost'] = comb_track_cost_list.copy()
     #tracklet_mat['save_fea_mat'] = save_fea_mat.copy()
+    new_cluster_cost = new_cluster_cost+track_struct['track_params']['cost_bias']
     cost = np.sum(new_cluster_cost)
     diff_cost = cost-tracklet_mat['cluster_cost'][tracklet_mat['track_class'][track_id]]
     return diff_cost,new_cluster_cost,new_cluster_set,change_cluster_idx
@@ -1910,7 +1930,7 @@ def crop_det(tracklet_mat, crop_size, img_folder, crop_det_folder, flag):
         if len(track_ids)==0: 
             continue 
         track_ids = track_ids[0] 
-        img_name = track_lib.file_name(n+1,6)+'.jpg'
+        img_name = track_lib.file_name(n+1,file_len)+'.jpg'
         if img_name in img_list:
             img_path = img_folder+'/'+img_name 
             img = misc.imread(img_path) 
@@ -2160,7 +2180,7 @@ def draw_result(img_folder, save_folder):
     table = color_table(len(tracklet_mat['track_cluster'])) 
     #import pdb; pdb.set_trace()
     for n in range(track_struct['final_tracklet_mat']['xmin_mat'].shape[1]): 
-        img_name = track_lib.file_name(n+1,6)+'.jpg'
+        img_name = track_lib.file_name(n+1,file_len)+'.jpg'
         if img_name not in img_list:
             continue
         img_path = img_folder+'/'+img_name
@@ -2344,7 +2364,7 @@ def TC_tracker():
     track_struct['track_params']['num_fr'] = int(np.max(M[:,0])-np.min(M[:,0])+1) 
     track_struct['track_params']['IOU_thresh'] = 0.5 
     track_struct['track_params']['color_thresh'] = 0.05
-    track_struct['track_params']['det_thresh'] = 0.6
+    track_struct['track_params']['det_thresh'] = -2
     track_struct['track_params']['det_y_thresh'] = 0
     track_struct['track_params']['det_y_thresh2'] = float("inf")
     track_struct['track_params']['det_y_thresh3'] = float("inf")
@@ -2353,7 +2373,7 @@ def TC_tracker():
     track_struct['track_params']['det_h_thresh2'] = float("inf")
     track_struct['track_params']['det_ratio_thresh1'] = float("inf")
     track_struct['track_params']['linear_pred_thresh'] = 5 
-    track_struct['track_params']['t_dist_thresh'] = 45 
+    track_struct['track_params']['t_dist_thresh'] = 60 
     track_struct['track_params']['track_overlap_thresh'] = 0.1 
     track_struct['track_params']['search_radius'] = 1
     track_struct['track_params']['const_fr_thresh'] = 1 
@@ -2361,14 +2381,14 @@ def TC_tracker():
     track_struct['track_params']['time_cluster_dist'] = 100
     track_struct['track_params']['merge_IOU'] = 0.7
     track_struct['track_params']['merge_mode'] = 1
-    track_struct['track_params']['pre_len'] = 4
+    track_struct['track_params']['pre_len'] = 5
     track_struct['track_params']['pre_det_score'] = 1
     track_struct['track_params']['svm_score_flag'] = 0
     track_struct['track_params']['h_score_flag'] = 0
     track_struct['track_params']['y_score_flag'] = 0
     track_struct['track_params']['IOU_gt_flag'] = 0
     track_struct['track_params']['use_F'] = 0
-    track_struct['track_params']['cost_bias'] = 0
+    track_struct['track_params']['cost_bias'] = 5
     track_struct['track_params']['appearance_mode'] = 0
     track_struct['track_params']['use_net'] = 1
     track_struct['track_params']['num_time_cluster'] = int(np.ceil(track_struct['track_params']['num_fr']
@@ -2428,7 +2448,11 @@ def TC_tracker():
             
         num_bbox = len(temp_M)
         
-        img_name = track_lib.file_name(fr_idx,6)+'.jpg'
+        #img_size = [1920,1080]
+        
+        #************************************
+        
+        img_name = track_lib.file_name(fr_idx,file_len)+'.jpg'
         if img_name in img_list:
             img_path = img_folder+'/'+img_name
             img = misc.imread(img_path) 
@@ -2439,18 +2463,7 @@ def TC_tracker():
         if num_bbox!=0:
             temp_M[:,1:5] = track_lib.crop_bbox_in_image(temp_M[:,1:5], img_size)
             
-        '''
-        if n==0:
-            img1 = img.copy()
-            img2 = img.copy()
-        else:
-            img1 = img2.copy()
-            img2 = img.copy()
-            if n>-1:
-                #track_lib.estimateF(img1, img2)
-                if len(temp_M)>1:
-                    track_lib.pred_bbox_by_F(img1, img2, temp_M[:,1:5], F[:,:,n])
-        '''
+        #************************************
         
         track_struct['track_obj']['track_id'].append([])
         if num_bbox==0:
@@ -2544,7 +2557,7 @@ def TC_tracker():
                      track_struct['track_obj']['mean_color'][n], track_struct['track_obj']['mean_color'][n+1],
                      n+2, track_struct['track_params'], track_struct['tracklet_mat'], max_id, [])
     
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     mask = track_struct['tracklet_mat']['xmin_mat']==-1
     mask = np.sum(mask,axis=1)
     neg_idx = np.where(mask==track_struct['track_params']['num_fr'])[0]
@@ -2563,6 +2576,64 @@ def TC_tracker():
         track_struct['tracklet_mat']['IOU_gt_mat'] = np.delete(track_struct['tracklet_mat']['IOU_gt_mat'], neg_idx, axis=0)
     #import pdb; pdb.set_trace()
     
+    
+    #********************************
+    '''
+    R_struct = loadmat('D:/Data/Kresimir video/camera pose/R.mat')
+    T_struct = loadmat('D:/Data/Kresimir video/camera pose/T.mat')   
+    K = np.zeros((3,3))
+    K[0,0] = 1662.8
+    K[0,2] = 960.5
+    K[1,1] = 1662.8
+    K[1,2] = 540.5
+    K[2,2] = 1
+    cam_st = 657-1
+    cam_end = 3521-1
+    R_set = R_struct['R'][0][cam_st:cam_end+1]
+    t_set = T_struct['T'][0][cam_st:cam_end+1]
+    
+    location_3d_mat = np.zeros((M.shape[0],14)) # fr_id, tracklet_id, x, y, z, s
+    cnt = 0
+    for n in range(len(track_struct['tracklet_mat']['xmin_mat'])):
+        xmin = track_struct['tracklet_mat']['xmin_mat'][n,cam_st:cam_end+1]
+        ymin = track_struct['tracklet_mat']['ymin_mat'][n,cam_st:cam_end+1]
+        xmax = track_struct['tracklet_mat']['xmax_mat'][n,cam_st:cam_end+1]
+        ymax = track_struct['tracklet_mat']['ymax_mat'][n,cam_st:cam_end+1]
+        t_idx = np.where(xmin!=-1)[0]
+        if len(t_idx)==0:
+            continue
+        xmin = xmin[t_idx]
+        ymin = ymin[t_idx]
+        xmax = xmax[t_idx]
+        ymax = ymax[t_idx]
+        
+        #if n>=35:
+        #    break
+            
+        X,X_center = track_lib.localization3D_by_bbox(xmin,ymin,xmax,ymax,K,R_set[t_idx],t_set[t_idx])
+        print(n)
+
+        for k in range(len(t_idx)):
+            location_3d_mat[cnt,0] = int(cam_st+t_idx[k])+1
+            location_3d_mat[cnt,1] = n+1
+            location_3d_mat[cnt,2:] = X[12*k:12*k+12,0]
+            #location_3d_mat[cnt,2] = X_center[0,k]
+            #location_3d_mat[cnt,3] = X_center[1,k]
+            #location_3d_mat[cnt,4] = X_center[2,k]
+            #location_3d_mat[cnt,5] = X_center[3,k]
+
+            cnt = cnt+1
+    
+    remove_idx = []
+    for n in range(len(location_3d_mat)):
+        if np.sum(location_3d_mat[n,:])==0:
+            remove_idx.append(n) 
+                
+    location_3d_mat = np.delete(location_3d_mat, np.array(remove_idx), axis=0)
+    np.savetxt('D:/Data/Kresimir video/fish_3d_2.txt', location_3d_mat, delimiter=',',fmt='%1.32e')
+    import pdb; pdb.set_trace()
+    '''
+    #*****************************************
     # tracklet clustering
     iters = 20
     track_struct['tracklet_mat'] = preprocessing(track_struct['tracklet_mat'], track_struct['track_params']['pre_len'],
@@ -2573,16 +2644,6 @@ def TC_tracker():
     #return track_struct
     
     
-    # remove large bbox
-    '''
-    #import pdb; pdb.set_trace()
-    for n in range(len(track_struct['tracklet_mat']['xmin_mat'])):
-        cand_t = np.where(track_struct['tracklet_mat']['xmin_mat'][n,:]!=-1)[0]
-        temp_h = track_struct['tracklet_mat']['ymax_mat'][n,cand_t]-track_struct['tracklet_mat']['ymin_mat'][n,cand_t]
-        min_h = np.min(temp_h)
-        if min_h<150:
-            remove_set.append(n)
-    '''
     
     #import pdb; pdb.set_trace()
     
@@ -2631,7 +2692,7 @@ def TC_tracker():
     batch_Y = tf.placeholder(tf.int32, [None, num_classes])
     keep_prob = tf.placeholder(tf.float32)
 
-    y_conv = seq_nn_3d.seq_nn(batch_X_x,batch_X_y,batch_X_w,batch_X_h,batch_X_a,batch_mask_1,
+    y_conv = seq_nn_3d_v2.seq_nn(batch_X_x,batch_X_y,batch_X_w,batch_X_h,batch_X_a,batch_mask_1,
                        batch_mask_2,batch_Y,max_length,feature_size,keep_prob)
 
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=batch_Y, logits=y_conv))
@@ -2647,6 +2708,9 @@ def TC_tracker():
         saver.restore(sess, seq_model)
         print("Model restored.")
 
+        #aa = tf.get_collection('h_pool_flat')
+        #import pdb; pdb.set_trace()
+        
         for n in range(iters):
             print("iteration")
             print(n)
