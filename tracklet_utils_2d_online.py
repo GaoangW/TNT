@@ -1833,7 +1833,7 @@ def TC_online(det_M, img, t_pointer, fr_idx, end_flag):
             track_idx = np.where(track_struct['tracklet_mat']['xmin_mat'][:,n]!=-1)[0]
             num_save_id = len(track_idx)
             if num_save_id!=0:
-                save_mat = np.zeros((num_save_id, 14))
+                save_mat = np.zeros((num_save_id, 12))
                 save_mat[:,0] = fr_idx-track_struct['track_params']['num_fr']+n+1
                 save_mat[:,1] = track_struct['tracklet_mat']['obj_id_mat'][track_idx]
                 track_struct['tracklet_mat']['save_obj_id_mask'][save_mat[:,1].astype(int)] = 1
