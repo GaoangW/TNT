@@ -37,11 +37,8 @@ feature_size = 4+512
 batch_size = 32
 num_classes = 2
 sample_prob = [0.0852,0.1996,0.2550,0.0313,0.0854,0.1546,0.1890]
-#sample_prob = np.ones(36)
-#remove_file_idx = [7,23]
-#sample_prob[remove_file_idx] = 0
 lr = 1e-3
-prev_thresh = 6.3
+
 
 
 # In[3]:
@@ -742,70 +739,18 @@ with tf.Session() as sess:
             ap = np.zeros((temp_batch_size,feature_size-4,max_length,1))
             mask_1 = np.zeros((temp_batch_size,1,max_length,2))
             mask_2 = np.zeros((temp_batch_size,feature_size-4,max_length,2))
-            #******************************************
-            # motion feature ablation study
            
             x[:,0,:,0] = batch_x[:,0,:,0]
             y[:,0,:,0] = batch_x[:,1,:,0]
             w[:,0,:,0] = batch_x[:,2,:,0]
             h[:,0,:,0] = batch_x[:,3,:,0]
             
-            #******************************************
-            # appeance feature ablation study
             ap[:,:,:,0] = batch_x[:,4:,:,0]
             
-            #******************************************
             mask_1[:,0,:,:] = batch_x[:,0,:,1:]
             mask_2[:,:,:,:] = batch_x[:,4:,:,1:]
             
             if cnt % 1 == 0:
-                
-                '''
-                for kk in range(x.shape[0]):
-                    #import pdb; pdb.set_trace()
-                    draw_traj(x[kk,0,:,0],mask_1[kk,0,:,:])
-                    draw_fea_map(h_pool3_3_x_fea[kk,:,:])
-                    import pdb; pdb.set_trace()
-                '''
-                
-                
-                temp_acc = 0
-                acc_vec = np.zeros(10)
-                
-                for nn in range(len(ap)):
-                    idx1 = np.where(mask_1[nn,0,:,0]==1)[0]
-                    idx2 = np.where(mask_1[nn,0,:,1]==1)[0]
-                    X1 = np.zeros((len(idx1),512))
-                    X2 = np.zeros((len(idx2),512))
-                    #import pdb; pdb.set_trace()
-                    X1[:,:] = ap[nn,:,idx1,0]
-                    X2[:,:] = ap[nn,:,idx2,0]
-                    pair_cost = spatial.distance.cdist(X1, X2, 'euclidean')
-                    min_cost = np.min(pair_cost)
-                    for mm in range(11):
-                        if mm==10:
-                            t_thresh = prev_thresh
-                        else:
-                            t_thresh = mm/2+3.5
-                        if min_cost<t_thresh:
-                            pred_l = 1
-                        else:
-                            pred_l = 0
-                        if batch_y[nn,0]==1:
-                            true_l = 1
-                        else:
-                            true_l = 0
-                        if pred_l==true_l:
-                            if mm==10:
-                                temp_acc = temp_acc+1
-                            else:
-                                acc_vec[mm] = acc_vec[mm]+1
-                            
-                acc_vec = acc_vec/len(ap)
-                acc2.append(temp_acc/len(ap))
-                t_opt_idx = np.where(acc_vec==np.max(acc_vec))[0]
-                t_opt_thresh = t_opt_idx[0]/2+3.5
-                prev_thresh = ((i+1)*prev_thresh+t_opt_thresh)/(i+2)
                 
                 temp_c = 0
                 while 1:
@@ -832,20 +777,6 @@ with tf.Session() as sess:
                     print(train_accuracy)
                     if train_accuracy>0.9:
                         break
-                    '''    
-                    train_accuracy = accuracy.eval(feed_dict={batch_X_x: x,
-                                                          batch_X_y: y,
-                                                          batch_X_w: w,
-                                                          batch_X_h: h,
-                                                          batch_X_a: ap,
-                                                          batch_mask_1: mask_1,
-                                                          batch_mask_2: mask_2,
-                                                          batch_Y: batch_y, 
-                                                          keep_prob: 1.0})
-                    '''                                          
-                
-                
-           
 
                     #import pdb; pdb.set_trace()
                     train_step.run(feed_dict={batch_X_x: x, 
@@ -865,9 +796,6 @@ with tf.Session() as sess:
         print(np.mean(acc))
         
         
-        acc2 = np.array(acc2)
-        print(np.mean(acc2))
-        print(prev_thresh)
         
         
         if cnt % 100 == 0:
