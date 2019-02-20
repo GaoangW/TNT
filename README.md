@@ -16,7 +16,7 @@ TNT/General/MOT_to_UA_Detrac.m <br />
 3. Crop the ground truth detection into individual bounding box images. <br />
 TNT/General/crop_UA_Detrac.m <br />
 4. Create validation pairs for FaceNet. <br />
-TNT/General/create_pairs.m <br />
+TNT/General/create_pair.m <br />
 5. Train the triplet appearance model based on FaceNet using the cropped data. <br />
 See https://github.com/davidsandberg/facenet. <br />
 All the useful scource code are in TNT/src/. <br />
