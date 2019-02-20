@@ -22,6 +22,7 @@ from scipy.interpolate import interp1d
 from scipy.io import loadmat
 from scipy import misc
 from scipy import stats
+from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
@@ -32,130 +33,29 @@ from skimage.feature import match_descriptors, ORB, plot_matches
 from skimage.measure import ransac
 from skimage.transform import FundamentalMatrixTransform
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel
-from skimage.feature import hog
-from skimage import color
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel, PairwiseKernel, DotProduct, RationalQuadratic
+from sklearn.decomposition import SparseCoder
 
-def localization3D_by_bbox(xmin,ymin,xmax,ymax,K,R_set,t_set):
-    lambda1 = 1
-    lambda2 = 5
-    lambda3 = 1
-    lambda4 = 1
-    lambda5 = 0.01
-    
-    T = len(R_set)
-    x = []
-    for n in range(T):
-        temp_x = []
-        pt = np.zeros((3,1))
-        pt[:,0] = np.array([xmin[n],ymin[n],1])
-        temp_x.append(pt.copy())
-        pt[:,0] = np.array([xmax[n],ymin[n],1])
-        temp_x.append(pt.copy())
-        pt[:,0] = np.array([xmin[n],ymax[n],1])
-        temp_x.append(pt.copy())
-        pt[:,0] = np.array([xmax[n],ymax[n],1])
-        temp_x.append(pt.copy())
-        x.append(temp_x.copy())
-    
-    # f = lambda1||AX||+lambda2||CX-b||+lambda3||UX||
-    
-    X = np.zeros((3*4*T+T,1))
-    A = np.zeros((3*4*(T-1),3*4*T+T))
-    C = np.zeros((3*4*T,3*4*T+T))
-    
-    #X = np.zeros((4*4*T,1)) # X = [X;s], KRX+Kt=s[x,y,1]
-    #A = np.zeros((3*4*(T-1),4*4*T))
-    #C = np.zeros((3*4*T,4*4*T))
-    b = np.zeros((3*4*T,1))
-    U = np.zeros((4*T,4*4*T))
-    D = np.zeros((4*T,4*4*T))
-    d = np.ones((4*T,1))
-    B = np.zeros((6*T,4*4*T))
-    e = np.zeros((6*T,1))
-    
-    for n in range(4*(T-1)):
-        A[n*3:n*3+3,n*3:n*3+3] = -np.identity(3)
-        A[n*3:n*3+3,n*3+12:n*3+15] = np.identity(3)
-        #A[n*3:n*3+3,n*12:n*12+3] = R_set[n]
-        #A[n*3:n*3+3,n*12+9:n*12+12] = -R_set[n]
-        #A[n*3:n*3+3,n*12+12:n*12+15] = -R_set[n+1]
-        #A[n*3:n*3+3,n*12+21:n*12+24] = R_set[n+1]
-        
-    for n in range(T):
-        C[n*12:n*12+3,n*12:n*12+3] = np.matmul(K,R_set[n])
-        C[n*12+3:n*12+6,n*12+3:n*12+6] = np.matmul(K,R_set[n])
-        C[n*12+6:n*12+9,n*12+6:n*12+9] = np.matmul(K,R_set[n])
-        C[n*12+9:n*12+12,n*12+9:n*12+12] = np.matmul(K,R_set[n])
-        
-        C[n*12:n*12+3,T*12+n] = -x[n][0][:,0]
-        C[n*12+3:n*12+6,T*12+n] = -x[n][1][:,0]
-        C[n*12+6:n*12+9,T*12+n] = -x[n][2][:,0]
-        C[n*12+9:n*12+12,T*12+n] = -x[n][3][:,0]
-        
-        #C[n*12:n*12+3,T*12+4*n] = -x[n][0][:,0]
-        #C[n*12+3:n*12+6,T*12+4*n+1] = -x[n][1][:,0]
-        #C[n*12+6:n*12+9,T*12+4*n+2] = -x[n][2][:,0]
-        #C[n*12+9:n*12+12,T*12+4*n+3] = -x[n][3][:,0]
-    
-    for n in range(T):
-        B[6*n:6*n+3,12*n:12*n+3] = -R_set[n]
-        B[6*n:6*n+3,12*n+3:12*n+6] = R_set[n]
-        B[6*n+3:6*n+6,12*n+6:12*n+9] = -R_set[n]
-        B[6*n+3:6*n+6,12*n+9:12*n+12] = R_set[n]
-    
-    for n in range(T):
-        e[6*n,0] = 0.05
-        e[6*n+3,0] = 0.05
-        
-    for n in range(T):
-        temp_b = -np.matmul(K,t_set[n])
-        b[n*12:n*12+3,0] = temp_b[:,0].copy()
-        temp_b = -np.matmul(K,t_set[n])
-        b[n*12+3:n*12+6,0] = temp_b[:,0].copy()
-        temp_b = -np.matmul(K,t_set[n])
-        b[n*12+6:n*12+9,0] = temp_b[:,0].copy()
-        temp_b = -np.matmul(K,t_set[n])
-        b[n*12+9:n*12+12,0] = temp_b[:,0].copy()
-    
-    for n in range(T):
-        U[4*n,12*n+2] = 1
-        U[4*n,12*n+5] = -1
-        U[4*n+1,12*n+5] = 1
-        U[4*n+1,12*n+8] = -1
-        U[4*n+2,12*n+8] = 1
-        U[4*n+2,12*n+11] = -1
-        U[4*n+3,12*n+11] = 1
-        U[4*n+3,12*n+2] = -1
-        temp_R = np.zeros((12,12))
-        temp_R[0:3,0:3] = R_set[n]
-        temp_R[3:6,3:6] = R_set[n]
-        temp_R[6:9,6:9] = R_set[n]
-        temp_R[9:12,9:12] = R_set[n]
-        U[4*n:4*n+4,12*n:12*n+12] = np.matmul(U[4*n:4*n+4,12*n:12*n+12],temp_R.copy())
-    
-    D[:,12*T:] = np.identity(4*T)
-    M = np.concatenate((lambda1*A,lambda2*C),axis=0)
-    #M = np.concatenate((M,lambda3*U),axis=0)
-    #M = np.concatenate((M,lambda4*D),axis=0)
-    #M = np.concatenate((M,lambda5*B),axis=0)
-    p = np.concatenate((lambda1*np.zeros((3*4*(T-1),1)),lambda2*b),axis=0)
-    #p = np.concatenate((p,lambda3*np.zeros((4*T,1))),axis=0)
-    #p = np.concatenate((p,lambda4*d),axis=0)
-    #p = np.concatenate((p,lambda5*e),axis=0)
-    
-    X = np.matmul(np.linalg.pinv(M),p)
-    X_center = np.zeros((4,T))
-    '''
-    for n in range(T):
-        X_center[0,n] = (X[12*n]+X[12*n+3]+X[12*n+6]+X[12*n+9])/4
-        X_center[1,n] = (X[12*n+1]+X[12*n+4]+X[12*n+7]+X[12*n+10])/4
-        X_center[2,n] = (X[12*n+2]+X[12*n+5]+X[12*n+8]+X[12*n+11])/4
-        X_center[3,n] = (X[12*T+4*n]+X[12*T+4*n+1]+X[12*T+4*n+2]+X[12*T+4*n+3])/4
-    '''    
-    #import pdb; pdb.set_trace()
-    #aa=np.matmul(K,np.matmul(R_set[0],X[0:3])+t_set[0])
-    return X, X_center
+def tracklet_classify(A, pca, D, knn, clf_coding):
+    encode_fea = np.zeros((len(A),len(D)))
+    for n in range(len(A)):
+        pca_fea = pca.transform(A[n])
+        dist = distance.cdist(pca_fea, D, 'euclidean')
+        x = np.zeros((len(pca_fea),len(D)))
+        for k in range(len(dist)):
+            sort_idx = np.argsort(dist[k,:])
+            temp_D = D[sort_idx[0:knn],:]
+            temp_coder = SparseCoder(dictionary=temp_D, transform_n_nonzero_coefs=10, 
+                                 transform_alpha=0.05, transform_algorithm='lasso_lars')
+            #import pdb; pdb.set_trace()
+            xx = np.zeros((1,D.shape[1]))
+            xx[:,:] = pca_fea[k,:]
+            temp_x = temp_coder.transform(xx)
+            x[k,sort_idx[0:knn]] = temp_x
+
+        encode_fea[n,:] = np.max(x, axis=0)
+    pred_set_label = clf_coding.predict(encode_fea)
+    return pred_set_label
 
 def interp_batch(total_batch_x):
     interp_batch_x = total_batch_x.copy()
@@ -169,42 +69,16 @@ def interp_batch(total_batch_x):
             continue
         interp_t = np.array(range(t1+1,t2))
         for k in range(total_batch_x.shape[1]):
-            temp_std = np.std(total_batch_x[n,k,total_batch_x[n,k,:,0]!=0,0])
+            #temp_std = np.std(total_batch_x[n,k,total_batch_x[n,k,:,0]!=0,0])
+            
+            temp_std1 = np.std(total_batch_x[n,k,total_batch_x[n,0,:,1]!=0,0])
+            temp_std2 = np.std(total_batch_x[n,k,total_batch_x[n,0,:,2]!=0,0])
+            
             x_p = [t1,t2]
             f_p = [total_batch_x[n,k,t1,0],total_batch_x[n,k,t2,0]]
-            interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)#+np.random.normal(0, temp_std, t2-t1-1)
+            #interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)#+np.random.normal(0, temp_std, t2-t1-1)
+            interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)+np.random.normal(0, (temp_std1+temp_std2)*0.5, t2-t1-1)
     return interp_batch_x
-
-def extract_hist(img_patch):
-    '''
-    # hog, 5*3 blocks
-    patch_size = img_patch.shape
-    fd, _ = hog(img_patch, orientations=8, pixels_per_cell=(int(patch_size[0]/5), int(patch_size[1]/3)),
-                    cells_per_block=(1, 1), visualize=True, multichannel=True)
-    '''
-    # color hist: 4*2 blocks, 16 bins, R,G,B,gray, 4 channels
-    num_block = [4,2]
-    n_bins = 16
-    fea = np.zeros(512)
-    patch_size = img_patch.shape
-    block_size = [int(patch_size[0]/num_block[0]),int(patch_size[1]/num_block[1])]
-    gray_img = color.rgb2gray(img_patch)
-    cnt = 0
-    for n1 in range(num_block[0]):
-        for n2 in range(num_block[1]):
-            #block_img = np.zeros((block_size[0],block_size[1],4))
-            #block_img[:,:,0:3] = img_patch[n1*block_size[0]:(n1+1)*block_size[0],n2*block_size[1]:(n2+1)*block_size[1],:]/255.0
-            #block_img[:,:,3] = gray_img[n1*block_size[0]:(n1+1)*block_size[0],n2*block_size[1]:(n2+1)*block_size[1]]
-            block_img = np.zeros((patch_size[0],patch_size[1],4))
-            block_img[:,:,0:3] = img_patch/255.0
-            block_img[:,:,3] = gray_img
-            for k in range(4):
-                fea[cnt*n_bins:(cnt+1)*n_bins],_ = np.histogram(block_img[:,:,k], bins=n_bins, range=(0,1), density=True)
-                #import pdb; pdb.set_trace()
-                cnt = cnt+1
-    
-    fea = fea/np.linalg.norm(fea)
-    return fea
 
 def GP_regression(tr_x,tr_y,test_x):
     A = np.ones((len(tr_x),2))
@@ -265,6 +139,55 @@ def show_trajectory(tracklet_mat, obj_id):
     #import pdb; pdb.set_trace()
     #plt.close('all')
     return
+    
+def remove_det(det_M, det_thresh, y_thresh, h_thresh, y_thresh2, ratio_1, h_thresh2, y_thresh3, y_thresh4):
+    
+    remove_idx = []
+    
+    # remove low det score
+    for n in range(len(det_M)):
+        if det_M[n,-1]<det_thresh:
+            remove_idx.append(n)
+            
+    # remove det upper the ground plane
+    for n in range(len(det_M)):
+        if det_M[n,2]<y_thresh:
+            remove_idx.append(n)
+            
+    # remove det below the ground plane
+    for n in range(len(det_M)):
+        if det_M[n,2]>y_thresh2:
+            remove_idx.append(n)
+    
+    # remove thin objects
+    for n in range(len(det_M)):
+        if (det_M[n,4]/det_M[n,3])>ratio_1:
+            remove_idx.append(n)
+            
+    # remove small object
+    for n in range(len(det_M)):
+        if det_M[n,4]<h_thresh:
+            remove_idx.append(n)
+            
+    # remove large object
+    for n in range(len(det_M)):
+        if det_M[n,4]>h_thresh2:
+            remove_idx.append(n)
+    
+    # remove ymax
+    for n in range(len(det_M)):
+        if det_M[n,2]+det_M[n,4]>y_thresh3:
+            remove_idx.append(n)
+            
+    # remove ymax
+    for n in range(len(det_M)):
+        if det_M[n,2]+det_M[n,4]<y_thresh4:
+            remove_idx.append(n)
+            
+    remove_idx = np.array(list(set(remove_idx)),dtype=int)
+    new_M = det_M.copy()
+    new_M = np.delete(new_M,remove_idx,axis=0)
+    return new_M
 
 def track_extend(xmins, ymins, xmaxs, ymaxs, img_size, bnd_margin, min_len, extend_len, reg_thresh, speed_thresh, static_len, fr_id):
     # img_size = [x,y]
@@ -444,13 +367,14 @@ def track_extend(xmins, ymins, xmaxs, ymaxs, img_size, bnd_margin, min_len, exte
                     relative_t = int(np.min(min_idx))
                     min_t = int(np.min(min_idx)+t1)
                 else:
-                    relative_t = 0
-                    min_t = int(t1)
+                    min_t = int(t2)
+                    relative_t = min_t-t1
                 extend_xmins[t1:min_t] = test_x[0:relative_t,0]
                 extend_ymins[t1:min_t] = test_y[0:relative_t,0]
                 extend_xmaxs[t1:min_t] = test_x[0:relative_t,0]+test_w[0:relative_t,0]
                 extend_ymaxs[t1:min_t] = test_y[0:relative_t,0]+test_h[0:relative_t,0]
-
+                #if fr_id==10:
+                #    import pdb; pdb.set_trace()
     #import pdb; pdb.set_trace()
     # constraint output inside image  
     neg_idx = np.where(extend_xmins==-1)[0]
@@ -467,8 +391,21 @@ def track_extend(xmins, ymins, xmaxs, ymaxs, img_size, bnd_margin, min_len, exte
         extend_ymins[neg_idx] = -1
         extend_xmaxs[neg_idx] = -1
         extend_ymaxs[neg_idx] = -1
+    
+    
+    neg_idx = np.where(np.logical_or(extend_ymaxs-extend_ymins<extend_xmaxs-extend_xmins,
+                                  extend_xmaxs-extend_xmins<(extend_ymaxs-extend_ymins)/5))[0] 
+    if len(neg_idx)!=0:
+        extend_xmins[neg_idx] = -1
+        extend_ymins[neg_idx] = -1
+        extend_xmaxs[neg_idx] = -1
+        extend_ymaxs[neg_idx] = -1
         
-    #if fr_id==10:
+    extend_xmins[extend_ymaxs-extend_ymins<80] = -1
+    extend_ymins[extend_ymaxs-extend_ymins<80] = -1
+    extend_xmaxs[extend_ymaxs-extend_ymins<80] = -1
+    extend_ymaxs[extend_ymaxs-extend_ymins<80] = -1
+    #if len(neg_idx)==len(extend_ymaxs):
     #    import pdb; pdb.set_trace()
     return check_flag,extend_xmins,extend_ymins,extend_xmaxs,extend_ymaxs
     
@@ -489,178 +426,6 @@ def check_bbox_near_img_bnd(bbox, img_size, margin):
     
     return check_flag
 
-def remove_det(det_M, det_thresh, y_thresh, h_thresh, y_thresh2, ratio_1, h_thresh2, y_thresh3, y_thresh4):
-    
-    remove_idx = []
-    
-    # remove low det score
-    for n in range(len(det_M)):
-        if det_M[n,-1]<det_thresh:
-            remove_idx.append(n)
-            
-    # remove det upper the ground plane
-    for n in range(len(det_M)):
-        if det_M[n,2]<y_thresh:
-            remove_idx.append(n)
-            
-    # remove det below the ground plane
-    for n in range(len(det_M)):
-        if det_M[n,2]>y_thresh2:
-            remove_idx.append(n)
-    
-    # remove thin objects
-    for n in range(len(det_M)):
-        if (det_M[n,4]/det_M[n,3])>ratio_1:
-            remove_idx.append(n)
-            
-    # remove small object
-    for n in range(len(det_M)):
-        if det_M[n,4]<h_thresh:
-            remove_idx.append(n)
-            
-    # remove large object
-    for n in range(len(det_M)):
-        if det_M[n,4]>h_thresh2:
-            remove_idx.append(n)
-    
-    # remove ymax
-    for n in range(len(det_M)):
-        if det_M[n,2]+det_M[n,4]>y_thresh3:
-            remove_idx.append(n)
-            
-    # remove ymax
-    for n in range(len(det_M)):
-        if det_M[n,2]+det_M[n,4]<y_thresh4:
-            remove_idx.append(n)
-            
-    remove_idx = np.array(list(set(remove_idx)),dtype=int)
-    new_M = det_M.copy()
-    new_M = np.delete(new_M,remove_idx,axis=0)
-    return new_M
-    
-def bbox_interp_with_F(F_set, start_fr, end_fr, start_bbox, end_bbox):
-    # bbox = [xmin,ymin,xmax,ymax]
-    
-    # initialize with linear interpolation
-    fr_range = np.array(range(start_fr,end_fr+1),dtype=int)
-    interp_bbox = np.zeros((end_fr-start_fr-1,4))
-    xmins = np.interp(fr_range,[start_fr,end_fr],[start_bbox[0],end_bbox[0]])
-    ymins = np.interp(fr_range,[start_fr,end_fr],[start_bbox[1],end_bbox[1]])
-    xmaxs = np.interp(fr_range,[start_fr,end_fr],[start_bbox[2],end_bbox[2]])
-    ymaxs = np.interp(fr_range,[start_fr,end_fr],[start_bbox[3],end_bbox[3]])
-    
-    N = len(xmins)-2
-    iters = 100
-    
-    for n in range(iters):
-        # forward update
-        for nn in range(N):
-            if n%2==0:
-                k = nn
-            else:
-                k = N-nn-1
-            fr_idx = fr_range[0]+k
-            F = F_set[:,:,fr_idx]
-            temp_pt = np.zeros((1,3))
-            temp_A = np.zeros((12,4))
-            temp_b = np.zeros((12,1))
-
-            if F[0,0]!=-1:    
-                temp_pt[0,:] = np.array([xmins[k],ymins[k],1])
-                A1 = np.matmul(temp_pt, np.transpose(F))
-                temp_A[0,0] = A1[0,0]
-                temp_A[0,1] = A1[0,1]
-                temp_b[0,0] = -A1[0,2]
-                
-                temp_pt[0,:] = np.array([xmaxs[k],ymins[k],1])
-                A2 = np.matmul(temp_pt, np.transpose(F))
-                temp_A[1,2] = A2[0,0]
-                temp_A[1,1] = A2[0,1]
-                temp_b[1,0] = -A2[0,2]
-        
-                temp_pt[0,:] = np.array([xmins[k],ymaxs[k],1])
-                A3 = np.matmul(temp_pt, np.transpose(F))
-                temp_A[2,0] = A3[0,0]
-                temp_A[2,3] = A3[0,1]
-                temp_b[2,0] = -A3[0,2]
-        
-                temp_pt[0,:] = np.array([xmaxs[k],ymaxs[k],1])
-                A4 = np.matmul(temp_pt, np.transpose(F))
-                temp_A[3,2] = A4[0,0]
-                temp_A[3,3] = A4[0,1]
-                temp_b[3,0] = -A4[0,2]
-            else:
-                temp_A[0,0] = 1
-                temp_b[0,0] = xmins[k]
-                temp_A[1,1] = 1
-                temp_b[1,0] = ymins[k]
-                temp_A[2,2] = 1
-                temp_b[2,0] = xmaxs[k]
-                temp_A[3,3] = 1
-                temp_b[3,0] = ymaxs[k]
-                
-            temp_A[4,0] = 1
-            temp_b[4,0] = xmins[k+1]
-            temp_A[5,1] = 1
-            temp_b[5,0] = ymins[k+1]
-            temp_A[6,2] = 1
-            temp_b[6,0] = xmaxs[k+1]
-            temp_A[7,3] = 1
-            temp_b[7,0] = ymaxs[k+1]
-            
-
-            F = F_set[:,:,fr_idx+1]
-            if F[0,0]!=-1:
-                temp_pt[0,:] = np.array([xmins[k+2],ymins[k+2],1])
-                A1 = np.matmul(temp_pt, F)
-                temp_A[8,0] = A1[0,0]
-                temp_A[8,1] = A1[0,1]
-                temp_b[8,0] = -A1[0,2]
-                
-                temp_pt[0,:] = np.array([xmaxs[k+2],ymins[k+2],1])
-                A2 = np.matmul(temp_pt, F)
-                temp_A[9,2] = A2[0,0]
-                temp_A[9,1] = A2[0,1]
-                temp_b[9,0] = -A2[0,2]
-        
-                temp_pt[0,:] = np.array([xmins[k+2],ymaxs[k+2],1])
-                A3 = np.matmul(temp_pt, F)
-                temp_A[10,0] = A3[0,0]
-                temp_A[10,3] = A3[0,1]
-                temp_b[10,0] = -A3[0,2]
-        
-                temp_pt[0,:] = np.array([xmaxs[k+2],ymaxs[k+2],1])
-                A4 = np.matmul(temp_pt, F)
-                temp_A[11,2] = A4[0,0]
-                temp_A[11,3] = A4[0,1]
-                temp_b[11,0] = -A4[0,2]
-            else:
-                temp_A[8,0] = 1
-                temp_b[8,0] = xmins[k+2]
-                temp_A[9,1] = 1
-                temp_b[9,0] = ymins[k+2]
-                temp_A[10,2] = 1
-                temp_b[10,0] = xmaxs[k+2]
-                temp_A[11,3] = 1
-                temp_b[11,0] = ymaxs[k+2]
-            
-            new_loc = np.matmul(np.linalg.pinv(temp_A),temp_b)
-            #if k==2:
-            #    import pdb; pdb.set_trace()
-            xmins[k+1] = new_loc[0,0]
-            ymins[k+1] = new_loc[1,0]
-            xmaxs[k+1] = new_loc[2,0]
-            ymaxs[k+1] = new_loc[3,0]
-        print(xmins)
-    
-    for n in range(len(interp_bbox)):
-        interp_bbox[n,0] = xmins[n+1]
-        interp_bbox[n,1] = ymins[n+1]
-        interp_bbox[n,2] = xmaxs[n+1]-xmins[n+1]+1
-        interp_bbox[n,3] = ymaxs[n+1]-ymins[n+1]+1
-        
-    return interp_bbox                      
-
 def pred_bbox_by_F(bbox, F, show_flag, img1, img2):
     #model, _, _, _, _ = estimateF(img1, img2)
     #F = model.params
@@ -674,11 +439,6 @@ def pred_bbox_by_F(bbox, F, show_flag, img1, img2):
         ax1.imshow(img1)
     
     pred_bbox = np.zeros((len(bbox),4))
-    
-    if F[0,0]==-1:
-        pred_bbox = bbox.copy()
-        return pred_bbox
-    
     for n in range(len(bbox)):
         xmin = bbox[n,0]
         ymin = bbox[n,1]
@@ -710,7 +470,7 @@ def pred_bbox_by_F(bbox, F, show_flag, img1, img2):
         h = bbox[n,3]
         
         temp_A = np.zeros((4,2))
-        temp_b = np.zeros((4,1))
+        temp_b = np.zeros((4,1));
         temp_pt = np.zeros((1,3))
         temp_pt[0,:] = np.array([xmin,ymin,1])
         A1 = np.matmul(temp_pt, np.transpose(F))
@@ -978,6 +738,20 @@ def load_detection(file_name, dataset):
         M[:,1:6] = f[:,2:7]
         #import pdb; pdb.set_trace()
         return M
+    if dataset=='YOLO':
+        f = np.loadtxt(file_name, dtype=str, delimiter=',')
+        f = np.array(f)
+        M = np.zeros((f.shape[0], 6))
+        cnt = 0
+        for n in range(len(f)):
+            M[cnt,0] = int(float(f[n][0]))+1
+            M[cnt,1] = int(float(f[n][2]))
+            M[cnt,2] = int(float(f[n][3]))
+            M[cnt,3] = int(float(f[n][4]))
+            M[cnt,4] = int(float(f[n][5]))
+            M[cnt,5] = float(f[n][6])/100.0
+            cnt = cnt+1
+        return M
     if dataset=='MOT_gt':
         # fr_id, x, y, w, h, obj_id, class_id
         f = np.loadtxt(file_name, delimiter=',')
@@ -1026,18 +800,23 @@ def load_detection(file_name, dataset):
                 cnt = cnt+1
             #import pdb; pdb.set_trace()
         return M
-    if dataset=='YOLO':
+    if dataset=='chongqing':
         f = np.loadtxt(file_name, dtype=str, delimiter=',')
         f = np.array(f)
-        M = np.zeros((f.shape[0], 6))
+        num = len(f)
+        M = np.zeros((num, 10))
         cnt = 0
         for n in range(len(f)):
-            M[cnt,0] = int(float(f[n][0]))+1
+            M[cnt,0] = int(float(f[n][0]))
             M[cnt,1] = int(float(f[n][2]))
             M[cnt,2] = int(float(f[n][3]))
             M[cnt,3] = int(float(f[n][4]))
             M[cnt,4] = int(float(f[n][5]))
-            M[cnt,5] = float(f[n][6])/100.0
+            M[cnt,5] = float(f[n][6])/100
+            M[cnt,6] = float(f[n][2])
+            M[cnt,7] = float(f[n][3])
+            M[cnt,8] = float(f[n][4])
+            M[cnt,9] = float(f[n][5])
             cnt = cnt+1
         return M
     
