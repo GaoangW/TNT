@@ -30,14 +30,18 @@ MAT_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/gt_mat'
 img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17Det/train'
 temp_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/temp'
 triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/update_facenet/UA_Detrac_model/MOT'
-save_dir = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_2d_v2/model.ckpt'
+save_dir = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_2d_v3/model.ckpt'
 bbox_size = 182
 max_length = 64
 feature_size = 4+512
 batch_size = 32
 num_classes = 2
 sample_prob = [0.0852,0.1996,0.2550,0.0313,0.0854,0.1546,0.1890]
-lr = 1e-4
+#sample_prob = np.ones(36)
+#remove_file_idx = [7,23]
+#sample_prob[remove_file_idx] = 0
+lr = 1e-3
+prev_thresh = 6.3
 
 
 # In[3]:
@@ -79,13 +83,15 @@ def interp_batch(total_batch_x):
             continue
         interp_t = np.array(range(t1+1,t2))
         for k in range(total_batch_x.shape[1]):
-            temp_std = np.std(total_batch_x[n,k,total_batch_x[n,k,:,0]!=0,0])
+            #temp_std = np.std(total_batch_x[n,k,total_batch_x[n,k,:,0]!=0,0])
+            temp_std1 = np.std(total_batch_x[n,k,total_batch_x[n,0,:,1]!=0,0])
+            temp_std2 = np.std(total_batch_x[n,k,total_batch_x[n,0,:,2]!=0,0])
             x_p = [t1,t2]
             f_p = [total_batch_x[n,k,t1,0],total_batch_x[n,k,t2,0]]
             #*************************************
             #interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)+np.random.normal(0, temp_std, t2-t1-1)
             #*************************************
-            interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)#+np.random.normal(0, temp_std*0.2, t2-t1-1)
+            interp_batch_x[n,k,t1+1:t2,0] = np.interp(interp_t,x_p,f_p)+np.random.normal(0, (temp_std1+temp_std2)*0.5, t2-t1-1)
     return interp_batch_x
     
 def num_str(num, length):
@@ -178,9 +184,9 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
     
     err_flag = 0
     part_W_mat = W_2d[:,obj_id]
-            
+    #import pdb; pdb.set_trace()        
     non_zero_idx = np.where(part_W_mat>0)[0]
-    if np.max(non_zero_idx)-np.min(non_zero_idx)+1!=len(non_zero_idx) or len(non_zero_idx)<=1:
+    if len(non_zero_idx)<=1 or np.max(non_zero_idx)-np.min(non_zero_idx)+1!=len(non_zero_idx):
         err_flag = 1
         return [], [], err_flag
                 
@@ -192,7 +198,7 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
             
     v_flag = 1
     rand_num = random.uniform(0.0,1.0)
-    if rand_num<0.8:   # 0.5
+    if rand_num<0.9 or len(V_2d)==0:   # 0.5
         v_flag = 0
     
     
@@ -224,8 +230,38 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
         ww = max(1,xmax-xmin+1)
         hh = max(1,ymax-ymin+1)
         #print(rand_num)
-        temp_bbox = [int(k), int(xmin), int(ymin), int(xmax), int(ymax)]
+        temp_bbox = [int(k), int(xmin), int(ymin), int(xmax), int(ymax), float(V_2d[k,obj_id])]
+        
+        if k==st_fr:
+            bbox = []
+            
+        if temp_bbox[-1]<0.5:
+            if len(bbox)==0:
+                continue
+            else:
+                bbox_tracklet.append(np.array(bbox))
+                bbox = []
+                continue
                 
+        rand_num = random.uniform(0.0,1.0)
+        if v_flag==0:
+            temp_connect = connect_thresh
+        else:
+            temp_connect = connect_thresh*math.sqrt(V_2d[k,obj_id])
+                       
+        if rand_num<temp_connect:
+            bbox.append(temp_bbox)
+            if k==end_fr and len(bbox)!=0:
+                bbox_tracklet.append(np.array(bbox))
+                #bbox_num.append(len(bbox))
+        else:
+            if len(bbox)!=0:
+                bbox_tracklet.append(np.array(bbox))
+                #bbox_num.append(len(bbox))
+            bbox = []
+            bbox.append(temp_bbox)
+            
+        '''    
         if k==st_fr:
             bbox = []
             bbox.append(temp_bbox)
@@ -246,16 +282,18 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
                 bbox_num.append(len(bbox))
                 bbox = []
                 bbox.append(temp_bbox)
-            
+         '''
+    #import pdb; pdb.set_trace()    
     t_interval = np.zeros((len(bbox_tracklet),2))
     for k in range(len(bbox_tracklet)):
+        #print(bbox_tracklet[k])
         t_interval[k,0] = bbox_tracklet[k][0,0]
         t_interval[k,1] = bbox_tracklet[k][-1,0]
     return bbox_tracklet, t_interval, err_flag
     
 def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
 
-    noise_scale = 0.15
+    noise_scale = 0.1    # 0.15
     #connect_thresh = 0.95
     connect_thresh = np.random.uniform(0.9,1)
     #sample_p = np.array([0.0852,0.1996,0.2550,0.0313,0.0854,0.1546,0.1890])
@@ -288,10 +326,16 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
         Y_2d = Mat_files[n]['gtInfo'][0][0][1]
         W_2d = Mat_files[n]['gtInfo'][0][0][2]
         H_2d = Mat_files[n]['gtInfo'][0][0][3]
-        V_2d = Mat_files[n]['gtInfo'][0][0][4]
-        img_size = Mat_files[n]['gtInfo'][0][0][5][0]
+        if len(Mat_files[n]['gtInfo'][0][0])<=4:
+            V_2d = []
+        else:
+            V_2d = Mat_files[n]['gtInfo'][0][0][4]
+        if len(Mat_files[n]['gtInfo'][0][0])==6:
+            img_size = Mat_files[n]['gtInfo'][0][0][5][0]
+        else:
+            img_size = [1920,1080]
         #V_2d = []
-        #img_size = [1920,1080]
+        
         #import pdb; pdb.set_trace()
         
         while 1:
@@ -338,6 +382,9 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
             # mask
             X[n,:,t1:t2+1,1] = 1
             X[n,:,t3:t4+1,2] = 1
+            #X[n,4:,t1:t2+1,1] = bbox_tracklet[select_pair[0]][:,5]
+            #X[n,4:,t3:t4+1,2] = bbox_tracklet[select_pair[1]][0:t4-t3+1,5]
+            #import pdb; pdb.set_trace() 
             
             # X    
             X[n,0,t1:t2+1,0] = 0.5*(bbox_tracklet[select_pair[0]][:,1]+bbox_tracklet[select_pair[0]][:,3])/img_size[0]
@@ -354,7 +401,7 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
             # H
             X[n,3,t1:t2+1,0] = (bbox_tracklet[select_pair[0]][:,4]-bbox_tracklet[select_pair[0]][:,2])/img_size[1]
             X[n,3,t3:t4+1,0] = (bbox_tracklet[select_pair[1]][0:t4-t3+1,4]-bbox_tracklet[select_pair[1]][0:t4-t3+1,2])/img_size[1]
-            '''        
+            '''       
             plt.plot(X[n,0,:,0], 'ro')
             plt.show()
             plt.plot(X[n,1,:,0], 'ro')
@@ -388,20 +435,44 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
         Y_2d = Mat_files[n]['gtInfo'][0][0][1]
         W_2d = Mat_files[n]['gtInfo'][0][0][2]
         H_2d = Mat_files[n]['gtInfo'][0][0][3]
-        V_2d = Mat_files[n]['gtInfo'][0][0][4]
-        img_size = Mat_files[n]['gtInfo'][0][0][5][0]
+        if len(Mat_files[n]['gtInfo'][0][0])<=4:
+            V_2d = []
+        else:
+            V_2d = Mat_files[n]['gtInfo'][0][0][4]
+        if len(Mat_files[n]['gtInfo'][0][0])==6:
+            img_size = Mat_files[n]['gtInfo'][0][0][5][0]
+        else:
+            img_size = [1920,1080]
         #V_2d = []
         #img_size = [1920,1080]
     
+        # check candidate obj pairs
+        #pair_mat = np.zeros((id_num,id_num))
+        cand_idx_pairs = []
+        for n1 in range(id_num-1):
+            for n2 in range(n1+1,id_num):
+                cand_fr1 = np.where(W_2d[:,n1]>0)[0]
+                cand_fr2 = np.where(W_2d[:,n2]>0)[0]
+                if max(cand_fr1[0],cand_fr2[0])<min(cand_fr1[-1],cand_fr2[-1]):
+                    cand_idx_pairs.append([n1,n2])
+                    #pair_mat[n1,n2] = 1
+        
+        #cand_pairs = np.nonzero(pair_mat)        
         while 1:
-            obj_id1 = np.random.randint(id_num, size=1)[0]
-            obj_id2 = np.random.randint(id_num, size=1)[0]
+            #
+            if len(cand_idx_pairs)==0:
+                import pdb; pdb.set_trace() 
+            pair_idx = np.random.randint(len(cand_idx_pairs), size=1)[0]
+            obj_id1 = cand_idx_pairs[pair_idx][0]
+            obj_id2 = cand_idx_pairs[pair_idx][1]
+            #import pdb; pdb.set_trace() 
             
             part_W_mat1 = W_2d[:,obj_id1]        
             non_zero_idx1 = np.where(part_W_mat1>0)[0]
             part_W_mat2 = W_2d[:,obj_id2]        
             non_zero_idx2 = np.where(part_W_mat2>0)[0]
-            if max(non_zero_idx1)+max_length<min(non_zero_idx2) or min(non_zero_idx1)>max(non_zero_idx2):
+            if len(non_zero_idx1)==0 or len(non_zero_idx2)==0 or \
+            max(non_zero_idx1)+max_length<min(non_zero_idx2) or min(non_zero_idx1)>max(non_zero_idx2):
                 continue
                 
             bbox_tracklet1, t_interval1, err_flag = split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id1,noise_scale,connect_thresh)
@@ -448,6 +519,8 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
             # mask
             X[n,:,t1:t2+1,1] = 1
             X[n,:,t3:t4+1,2] = 1
+            #X[n,4:,t1:t2+1,1] = bbox_tracklet1[select_pair[0]][:,5]
+            #X[n,4:,t3:t4+1,2] = bbox_tracklet2[select_pair[1]][0:t4-t3+1,5]
             
             # X    
             X[n,0,t1:t2+1,0] = 0.5*(bbox_tracklet1[select_pair[0]][:,1]+bbox_tracklet1[select_pair[0]][:,3])/img_size[0]
@@ -493,6 +566,7 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
         temp_all_path = []
         seq_name = Mat_paths[choose_idx[n]][:-4]
         img_path = img_folder+'/'+seq_name+'/img1/'
+        #img_path = img_folder+'/'+seq_name+'/'
         track_name = file_name(n+1,4)
         save_path = temp_folder+'/'+track_name
         if not os.path.exists(save_path):
@@ -668,27 +742,24 @@ with tf.Session() as sess:
             ap = np.zeros((temp_batch_size,feature_size-4,max_length,1))
             mask_1 = np.zeros((temp_batch_size,1,max_length,2))
             mask_2 = np.zeros((temp_batch_size,feature_size-4,max_length,2))
+            #******************************************
+            # motion feature ablation study
+           
             x[:,0,:,0] = batch_x[:,0,:,0]
             y[:,0,:,0] = batch_x[:,1,:,0]
             w[:,0,:,0] = batch_x[:,2,:,0]
             h[:,0,:,0] = batch_x[:,3,:,0]
+            
+            #******************************************
+            # appeance feature ablation study
             ap[:,:,:,0] = batch_x[:,4:,:,0]
+            
+            #******************************************
             mask_1[:,0,:,:] = batch_x[:,0,:,1:]
             mask_2[:,:,:,:] = batch_x[:,4:,:,1:]
             
             if cnt % 1 == 0:
                 
-                '''
-                y_pred, h_pool3_3_x_fea,  = sess.run([y_conv, h_pool3_3_x],feed_dict={batch_X_x: x,
-                                                          batch_X_y: y,
-                                                          batch_X_w: w,
-                                                          batch_X_h: h,
-                                                          batch_X_a: ap,
-                                                          batch_mask_1: mask_1,
-                                                          batch_mask_2: mask_2,
-                                                          batch_Y: batch_y, 
-                                                          keep_prob: 1.0})
-                '''
                 '''
                 for kk in range(x.shape[0]):
                     #import pdb; pdb.set_trace()
@@ -697,7 +768,10 @@ with tf.Session() as sess:
                     import pdb; pdb.set_trace()
                 '''
                 
+                
                 temp_acc = 0
+                acc_vec = np.zeros(10)
+                
                 for nn in range(len(ap)):
                     idx1 = np.where(mask_1[nn,0,:,0]==1)[0]
                     idx2 = np.where(mask_1[nn,0,:,1]==1)[0]
@@ -708,19 +782,34 @@ with tf.Session() as sess:
                     X2[:,:] = ap[nn,:,idx2,0]
                     pair_cost = spatial.distance.cdist(X1, X2, 'euclidean')
                     min_cost = np.min(pair_cost)
-                    if min_cost<7:
-                        pred_l = 1
-                    else:
-                        pred_l = 0
-                    if batch_y[nn,0]==1:
-                        true_l = 1
-                    else:
-                        true_l = 0
-                    if pred_l==true_l:
-                        temp_acc = temp_acc+1
-                acc2.append(temp_acc/(len(ap)))
+                    for mm in range(11):
+                        if mm==10:
+                            t_thresh = prev_thresh
+                        else:
+                            t_thresh = mm/2+3.5
+                        if min_cost<t_thresh:
+                            pred_l = 1
+                        else:
+                            pred_l = 0
+                        if batch_y[nn,0]==1:
+                            true_l = 1
+                        else:
+                            true_l = 0
+                        if pred_l==true_l:
+                            if mm==10:
+                                temp_acc = temp_acc+1
+                            else:
+                                acc_vec[mm] = acc_vec[mm]+1
                             
-                train_accuracy = accuracy.eval(feed_dict={batch_X_x: x,
+                acc_vec = acc_vec/len(ap)
+                acc2.append(temp_acc/len(ap))
+                t_opt_idx = np.where(acc_vec==np.max(acc_vec))[0]
+                t_opt_thresh = t_opt_idx[0]/2+3.5
+                prev_thresh = ((i+1)*prev_thresh+t_opt_thresh)/(i+2)
+                
+                temp_c = 0
+                while 1:
+                    y_pred = sess.run(y_conv,feed_dict={batch_X_x: x,
                                                           batch_X_y: y,
                                                           batch_X_w: w,
                                                           batch_X_h: h,
@@ -729,39 +818,58 @@ with tf.Session() as sess:
                                                           batch_mask_2: mask_2,
                                                           batch_Y: batch_y, 
                                                           keep_prob: 1.0})
-                acc.append(train_accuracy)
+                
+                    wrong_idx = []
+                    for mm in range(len(y_pred)):
+                        if (y_pred[mm,0]>y_pred[mm,1] and batch_y[mm,0]==0) or (y_pred[mm,0]<=y_pred[mm,1] and batch_y[mm,0]==1):
+                            wrong_idx.append(mm)
+                
+                    train_accuracy = (len(y_pred)-len(wrong_idx))/len(y_pred)
+                    if temp_c==0:
+                        acc.append(train_accuracy)
+                    temp_c = temp_c+1
+                    
+                    print(train_accuracy)
+                    if train_accuracy>0.9:
+                        break
+                    '''    
+                    train_accuracy = accuracy.eval(feed_dict={batch_X_x: x,
+                                                          batch_X_y: y,
+                                                          batch_X_w: w,
+                                                          batch_X_h: h,
+                                                          batch_X_a: ap,
+                                                          batch_mask_1: mask_1,
+                                                          batch_mask_2: mask_2,
+                                                          batch_Y: batch_y, 
+                                                          keep_prob: 1.0})
+                    '''                                          
+                
+                
+           
+
+                    #import pdb; pdb.set_trace()
+                    train_step.run(feed_dict={batch_X_x: x, 
+                                              batch_X_y: y, 
+                                              batch_X_w: w, 
+                                              batch_X_h: h, 
+                                              batch_X_a: ap, 
+                                              batch_mask_1: mask_1, 
+                                              batch_mask_2: mask_2, 
+                                              batch_Y: batch_y, 
+                                              keep_prob: 0.75})
+            
+                
                 print('step %d, training accuracy %g' % (cnt, train_accuracy))
-            
-            '''
-            for n in range(10):
-                shuffle_x = np.copy(batch_x)
-                shuffle_y = np.copy(batch_y)
-
-                if n!=0:
-                    shuffle_x2 = np.copy(shuffle_x)
-                    shuffle_y2 = np.copy(shuffle_y)
-                    idx = np.array(range(4,feature_size))
-                    np.random.shuffle(idx)
-                    for k in range(len(idx)):
-                        shuffle_x[:,idx[k],:,:] = shuffle_x2[:,k+4,:,:]
-            '''    
-
-            #import pdb; pdb.set_trace()
-            train_step.run(feed_dict={batch_X_x: x, 
-                                      batch_X_y: y, 
-                                      batch_X_w: w, 
-                                      batch_X_h: h, 
-                                      batch_X_a: ap, 
-                                      batch_mask_1: mask_1, 
-                                      batch_mask_2: mask_2, 
-                                      batch_Y: batch_y, 
-                                      keep_prob: 0.75})
-            
+        
         acc = np.array(acc)
         print(np.mean(acc))
+        
+        
         acc2 = np.array(acc2)
         print(np.mean(acc2))
-            
+        print(prev_thresh)
+        
+        
         if cnt % 100 == 0:
             save_path = saver.save(sess, save_dir)
             print("Model saved in path: %s" % save_path)
