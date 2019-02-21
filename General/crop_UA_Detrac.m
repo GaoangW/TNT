@@ -39,12 +39,12 @@ for m = 1:length(img_list)
         ymax = round(min(ymax+margin,img_size(1)));
         crop_img = img(ymin:ymax,xmin:xmax,:);
         crop_img = imresize(crop_img, [resize_size,resize_size]);
-        class_name = [seq_name,'_',fileName(k,8)];
+        class_name = [seq_name,'_',fileName(k,4)];
         class_folder = [save_folder,'\',class_name];
         if exist(class_folder,'dir')<=0
             mkdir(class_folder)
         end
-        id_name = [class_name,'_',fileName(m,8)];
+        id_name = [class_name,'_',fileName(m,4)];
         save_path = [class_folder,'\',id_name,'.png'];
         imwrite(crop_img, save_path);
     end
