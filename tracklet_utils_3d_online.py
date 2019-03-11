@@ -336,7 +336,7 @@ def comb_cost(tracklet_set, sess):
             else:
                 batch_size = int(comb_fea_mat.shape[0]-(num_batch-1)*max_batch_size)
                 
-            batch_size = comb_fea_mat.shape[0]
+            #batch_size = comb_fea_mat.shape[0]
             x = np.zeros((batch_size,1,max_length,1))
             y = np.zeros((batch_size,1,max_length,1))
             w = np.zeros((batch_size,1,max_length,1))
