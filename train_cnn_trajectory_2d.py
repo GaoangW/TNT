@@ -25,20 +25,32 @@ import scipy
 import shutil
 
 # In[2]:
+'''
+MAT_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/GT_MAT/total'
+img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/track1_frames/test'
+temp_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/temp'
+triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/AI_city_model'
+save_dir = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/MOT_2d_v2_new/model.ckpt'
+'''
 
-MAT_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/gt_mat'
+MAT_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/gt_mat_head'
 img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17Det/train'
 temp_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/temp'
-triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/update_facenet/UA_Detrac_model/MOT'
-save_dir = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_2d_v3/model.ckpt'
+triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_head_appearance_v2'
+save_dir = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_2d_head/model.ckpt'
+
 bbox_size = 182
 max_length = 64
 feature_size = 4+512
 batch_size = 32
 num_classes = 2
+margin = 0.3
 sample_prob = [0.0852,0.1996,0.2550,0.0313,0.0854,0.1546,0.1890]
-lr = 1e-3
-
+#sample_prob = np.ones(25)
+#remove_file_idx = [7,23]
+#sample_prob[remove_file_idx] = 0
+lr = 1e-4
+prev_thresh = 6.38
 
 
 # In[3]:
@@ -195,7 +207,7 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
             
     v_flag = 1
     rand_num = random.uniform(0.0,1.0)
-    if rand_num<0.9 or len(V_2d)==0:   # 0.5
+    if rand_num<0.5 or len(V_2d)==0:   # 0.5
         v_flag = 0
     
     
@@ -290,9 +302,9 @@ def split_track(X_2d,Y_2d,W_2d,H_2d,V_2d,img_size,obj_id,noise_scale,connect_thr
     
 def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
 
-    noise_scale = 0.1    # 0.15
+    noise_scale = 0.15    # 0.15
     #connect_thresh = 0.95
-    connect_thresh = np.random.uniform(0.9,1)
+    connect_thresh = np.random.uniform(0.6,1)
     #sample_p = np.array([0.0852,0.1996,0.2550,0.0313,0.0854,0.1546,0.1890])
     sample_p = np.array(sample_prob)
     sample_p = list(sample_p/sum(sample_p))
@@ -323,6 +335,15 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
         Y_2d = Mat_files[n]['gtInfo'][0][0][1]
         W_2d = Mat_files[n]['gtInfo'][0][0][2]
         H_2d = Mat_files[n]['gtInfo'][0][0][3]
+        
+        #########################################
+        X_2d = X_2d-margin*W_2d
+        Y_2d = Y_2d-margin*H_2d
+        W_2d = (1+2*margin)*W_2d
+        H_2d = (1+2*margin)*H_2d
+        ##########################################
+        
+        
         if len(Mat_files[n]['gtInfo'][0][0])<=4:
             V_2d = []
         else:
@@ -432,6 +453,14 @@ def generate_data(feature_size, max_length, batch_size, MAT_folder, img_folder):
         Y_2d = Mat_files[n]['gtInfo'][0][0][1]
         W_2d = Mat_files[n]['gtInfo'][0][0][2]
         H_2d = Mat_files[n]['gtInfo'][0][0][3]
+        
+        #########################################
+        X_2d = X_2d-margin*W_2d
+        Y_2d = Y_2d-margin*H_2d
+        W_2d = (1+2*margin)*W_2d
+        H_2d = (1+2*margin)*H_2d
+        ##########################################
+        
         if len(Mat_files[n]['gtInfo'][0][0])<=4:
             V_2d = []
         else:
@@ -645,7 +674,7 @@ batch_mask_2 = tf.placeholder(tf.float32, [None, feature_size-4, max_length, 2])
 batch_Y = tf.placeholder(tf.int32, [None, num_classes])
 keep_prob = tf.placeholder(tf.float32)
 
-y_conv = seq_nn_3d_v2.seq_nn(batch_X_x,batch_X_y,batch_X_w,batch_X_h,batch_X_a,batch_mask_1,batch_mask_2,batch_Y,max_length,feature_size,keep_prob)
+y_conv, h_pool1_3_a = seq_nn_3d_v2.seq_nn(batch_X_x,batch_X_y,batch_X_w,batch_X_h,batch_X_a,batch_mask_1,batch_mask_2,batch_Y,max_length,feature_size,keep_prob)
 
 cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=batch_Y, logits=y_conv))
 train_step = tf.train.AdamOptimizer(lr).minimize(cross_entropy)
@@ -739,18 +768,80 @@ with tf.Session() as sess:
             ap = np.zeros((temp_batch_size,feature_size-4,max_length,1))
             mask_1 = np.zeros((temp_batch_size,1,max_length,2))
             mask_2 = np.zeros((temp_batch_size,feature_size-4,max_length,2))
+            #******************************************
+            # motion feature ablation study
            
             x[:,0,:,0] = batch_x[:,0,:,0]
             y[:,0,:,0] = batch_x[:,1,:,0]
             w[:,0,:,0] = batch_x[:,2,:,0]
             h[:,0,:,0] = batch_x[:,3,:,0]
             
+            #******************************************
+            # appeance feature ablation study
             ap[:,:,:,0] = batch_x[:,4:,:,0]
             
+            #******************************************
             mask_1[:,0,:,:] = batch_x[:,0,:,1:]
             mask_2[:,:,:,:] = batch_x[:,4:,:,1:]
             
             if cnt % 1 == 0:
+                
+                
+                '''
+                h_pool1_3_a_fea = sess.run(h_pool1_3_a,feed_dict={batch_X_x: x,
+                                                          batch_X_y: y,
+                                                          batch_X_w: w,
+                                                          batch_X_h: h,
+                                                          batch_X_a: ap,
+                                                          batch_mask_1: mask_1,
+                                                          batch_mask_2: mask_2,
+                                                          batch_Y: batch_y, 
+                                                          keep_prob: 1.0})
+                for kk in range(x.shape[0]):
+                    #import pdb; pdb.set_trace()
+                    draw_traj(x[kk,0,:,0],mask_1[kk,0,:,:])
+                    draw_fea_map(h_pool1_3_a_fea[kk,:,:])
+                    import pdb; pdb.set_trace()
+                '''
+                
+                
+                temp_acc = 0
+                acc_vec = np.zeros(10)
+                
+                for nn in range(len(ap)):
+                    idx1 = np.where(mask_1[nn,0,:,0]==1)[0]
+                    idx2 = np.where(mask_1[nn,0,:,1]==1)[0]
+                    X1 = np.zeros((len(idx1),512))
+                    X2 = np.zeros((len(idx2),512))
+                    #import pdb; pdb.set_trace()
+                    X1[:,:] = ap[nn,:,idx1,0]
+                    X2[:,:] = ap[nn,:,idx2,0]
+                    pair_cost = spatial.distance.cdist(X1, X2, 'euclidean')
+                    min_cost = np.min(pair_cost)
+                    for mm in range(11):
+                        if mm==10:
+                            t_thresh = prev_thresh
+                        else:
+                            t_thresh = mm/2+3.5
+                        if min_cost<t_thresh:
+                            pred_l = 1
+                        else:
+                            pred_l = 0
+                        if batch_y[nn,0]==1:
+                            true_l = 1
+                        else:
+                            true_l = 0
+                        if pred_l==true_l:
+                            if mm==10:
+                                temp_acc = temp_acc+1
+                            else:
+                                acc_vec[mm] = acc_vec[mm]+1
+                            
+                acc_vec = acc_vec/len(ap)
+                acc2.append(temp_acc/len(ap))
+                t_opt_idx = np.where(acc_vec==np.max(acc_vec))[0]
+                t_opt_thresh = t_opt_idx[0]/2+3.5
+                prev_thresh = ((i+1)*prev_thresh+t_opt_thresh)/(i+2)
                 
                 temp_c = 0
                 while 1:
@@ -777,6 +868,20 @@ with tf.Session() as sess:
                     print(train_accuracy)
                     if train_accuracy>0.9:
                         break
+                    '''    
+                    train_accuracy = accuracy.eval(feed_dict={batch_X_x: x,
+                                                          batch_X_y: y,
+                                                          batch_X_w: w,
+                                                          batch_X_h: h,
+                                                          batch_X_a: ap,
+                                                          batch_mask_1: mask_1,
+                                                          batch_mask_2: mask_2,
+                                                          batch_Y: batch_y, 
+                                                          keep_prob: 1.0})
+                    '''                                          
+                
+                
+           
 
                     #import pdb; pdb.set_trace()
                     train_step.run(feed_dict={batch_X_x: x, 
@@ -796,6 +901,9 @@ with tf.Session() as sess:
         print(np.mean(acc))
         
         
+        acc2 = np.array(acc2)
+        print(np.mean(acc2))
+        print(prev_thresh)
         
         
         if cnt % 100 == 0:
