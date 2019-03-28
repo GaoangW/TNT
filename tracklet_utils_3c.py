@@ -2364,7 +2364,7 @@ def TC_tracker():
     track_struct['track_params']['num_fr'] = int(np.max(M[:,0])-np.min(M[:,0])+1) 
     track_struct['track_params']['IOU_thresh'] = 0.5 
     track_struct['track_params']['color_thresh'] = 0.05
-    track_struct['track_params']['det_thresh'] = -2
+    track_struct['track_params']['det_thresh'] = 0
     track_struct['track_params']['det_y_thresh'] = 0
     track_struct['track_params']['det_y_thresh2'] = float("inf")
     track_struct['track_params']['det_y_thresh3'] = float("inf")
@@ -2373,7 +2373,7 @@ def TC_tracker():
     track_struct['track_params']['det_h_thresh2'] = float("inf")
     track_struct['track_params']['det_ratio_thresh1'] = float("inf")
     track_struct['track_params']['linear_pred_thresh'] = 5 
-    track_struct['track_params']['t_dist_thresh'] = 60 
+    track_struct['track_params']['t_dist_thresh'] = 45 
     track_struct['track_params']['track_overlap_thresh'] = 0.1 
     track_struct['track_params']['search_radius'] = 1
     track_struct['track_params']['const_fr_thresh'] = 1 
@@ -2388,7 +2388,7 @@ def TC_tracker():
     track_struct['track_params']['y_score_flag'] = 0
     track_struct['track_params']['IOU_gt_flag'] = 0
     track_struct['track_params']['use_F'] = 0
-    track_struct['track_params']['cost_bias'] = 5
+    track_struct['track_params']['cost_bias'] = 0
     track_struct['track_params']['appearance_mode'] = 0
     track_struct['track_params']['use_net'] = 1
     track_struct['track_params']['num_time_cluster'] = int(np.ceil(track_struct['track_params']['num_fr']
