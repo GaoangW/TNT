@@ -1,3 +1,13 @@
+    
+/*
+ * Copyright ©2019 Gaoang Wang.  All rights reserved.  Permission is
+ * hereby granted for academic use.  No other use, copying, distribution, or modification
+ * is permitted without prior written consent. Copyrights for
+ * third-party components of this work must be honored.  Instructors
+ * interested in reusing these course materials should contact the
+ * author.
+ */
+    
 import tensorflow as tf
 
 def weight_variable(shape):
