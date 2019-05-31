@@ -36,9 +36,11 @@ The frame index and object index are from 1 (not 0) for both tracking ground tru
 5. Run python TNT/TC_tracker.py. <br />
 # Citation
 Use this bibtex to cite this repository: <br />
+'''
 @article{wang2018exploit,
   title={Exploit the Connectivity: Multi-Object Tracking with TrackletNet},
   author={Wang, Gaoang and Wang, Yizhou and Zhang, Haotian and Gu, Renshu and Hwang, Jenq-Neng},
   journal={arXiv preprint arXiv:1811.07258},
   year={2018}
 }
+'''
