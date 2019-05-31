@@ -18,3 +18,13 @@ The model can be downloaded from https://drive.google.com/open?id=1mbJf08hJY0qXV
 4. Adjust the tracking parameters in track_struct['track_params'] of TNT/AIC19/tracklet_utils_3c.py in the function TC_tracker(). <br />
 5. Run python TNT/AIC19/TC_tracker.py. <br />
 6. Run post_deep_match.py for post processing if necessary.
+# Citation
+Use this bibtex to cite this repository:
+```
+@article{wang2018exploit,
+  title={Exploit the Connectivity: Multi-Object Tracking with TrackletNet},
+  author={Wang, Gaoang and Wang, Yizhou and Zhang, Haotian and Gu, Renshu and Hwang, Jenq-Neng},
+  journal={arXiv preprint arXiv:1811.07258},
+  year={2018}
+}
+```
