@@ -17,4 +17,4 @@ The model can be downloaded from https://drive.google.com/open?id=1mbJf08hJY0qXV
 3. Set the file_len to be the string length of your input frame name before the extension. <br />
 4. Adjust the tracking parameters in track_struct['track_params'] of TNT/AIC19/tracklet_utils_3c.py in the function TC_tracker(). <br />
 5. Run python TNT/AIC19/TC_tracker.py. <br />
-
+6. Run post_deep_match.py for post processing if necessary.
