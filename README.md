@@ -34,3 +34,11 @@ The frame index and object index are from 1 (not 0) for both tracking ground tru
 3. Set the file_len to be the string length of your input frame name before the extension. <br />
 4. Adjust the tracking parameters in track_struct['track_params'] of TNT/tracklet_utils_3c.py in the function TC_tracker(). <br />
 5. Run python TNT/TC_tracker.py. <br />
+# Citation
+Use this bibtex to cite this repository: <br />
+@article{wang2018exploit,
+  title={Exploit the Connectivity: Multi-Object Tracking with TrackletNet},
+  author={Wang, Gaoang and Wang, Yizhou and Zhang, Haotian and Gu, Renshu and Hwang, Jenq-Neng},
+  journal={arXiv preprint arXiv:1811.07258},
+  year={2018}
+}
