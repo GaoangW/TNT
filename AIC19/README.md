@@ -18,6 +18,9 @@ The model can be downloaded from https://drive.google.com/open?id=1mbJf08hJY0qXV
 4. Adjust the tracking parameters in track_struct['track_params'] of TNT/AIC19/tracklet_utils_3c.py in the function TC_tracker(). <br />
 5. Run python TNT/AIC19/TC_tracker.py. <br />
 6. Run post_deep_match.py for post processing if necessary.
+7. The SCT results are saved in the txt_result folder.
+8. Run get_GPS.m to obtain the GPS location of the tracking results.
+9. The final outputs are saved in the txt_GPS_new folder.
 
 # SCT results
 The SCT results are saved in TNT/AIC19/txt_GPS_new.
