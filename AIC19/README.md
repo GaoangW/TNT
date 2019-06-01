@@ -20,7 +20,7 @@ The model can be downloaded from https://drive.google.com/open?id=1mbJf08hJY0qXV
 6. Run post_deep_match.py for post processing if necessary.
 
 # SCT results
-The SCT results are saved in TNT/AIC19/txt_GPS_new folder.
+The SCT results are saved in TNT/AIC19/txt_GPS_new.
 
 # Citation
 Use this bibtex to cite this repository:
