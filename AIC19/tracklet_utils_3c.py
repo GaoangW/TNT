@@ -43,60 +43,26 @@ sub_seq_name = ''
 file_len = 6
 tracklet_classify_flag = 0
 
-
+# ROI path
 ROI_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/test_ROI/c024.png'
+# Detection path
 det_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/aic19-track1-mtmc/test/s05/c024/det/det_ssd512.txt'
 gt_path = ''
+# Testing image path
 img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/test_img/'+seq_name
+# Cropped detection results
 crop_det_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/crop_det/'+seq_name+sub_seq_name
 triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/AI_city_model'
 seq_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_city/MOT_2d_v2_new/model.ckpt'
+# Tracking image output
 tracking_img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/tracking_img/'+seq_name+sub_seq_name
+# Tracking video output
 tracking_video_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/tracking_video/'+seq_name+sub_seq_name+'.avi'
 appear_mat_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/appear_mat/'+seq_name+'.obj'
+# Tracking txt results
 txt_result_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/txt_result/'+seq_name+sub_seq_name+'.txt'
 track_struct_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/AI_City_2019/track_struct/'+seq_name+sub_seq_name+'.obj'
 
-'''
-seq_name = 'MOT17-14-FRCNN'
-img_name = 'MOT17-14'
-sub_seq_name = ''
-file_len = 6
-tracklet_classify_flag = 0
-det_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17Labels/test/'+seq_name+'/det/det.txt'
-gt_path = ''#'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17Labels/train/'+seq_name+'/gt/gt.txt'
-img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17Det/test/'+img_name+sub_seq_name+'/img1'
-crop_det_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/crop_det/'+seq_name+sub_seq_name
-triplet_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_head_appearance_v2'
-#triplet_model = 'D:/Data/UA-Detrac/UA_Detrac_model/KITTI_model'
-#seq_model = 'D:/Data/UA-Detrac/cnn_appear_model_517_128_16600steps/model.ckpt'
-#seq_model = 'D:/Data/UA-Detrac/cnn_MOT/model.ckpt'
-seq_model = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT_2d_head/model.ckpt'
-#seq_model = 'D:/Data/UA-Detrac/semi_train_model/model.ckpt'
-tracking_img_folder = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/tracking_img/'+seq_name+sub_seq_name
-tracking_video_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/tracking_video/'+seq_name+sub_seq_name+'.avi'
-svm_model_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/MOT17_train_det_crop/cnn_svm_MOT17.pkl'
-#rand_forest_model_path = 'D:/Data/MOT/MOT17_train_det_crop/rand_forest_MOT17_FRCNN.pkl'
-F_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/geometry_info/'+img_name+'_F_set.mat'
-
-appear_mat_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/appear_mat/'+seq_name+'.obj'
-'''
-'''
-save_fea_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'.obj'
-save_label_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_label.obj'
-save_remove_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_remove_set.obj'
-save_all_fea_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all.obj'
-save_all_label_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all_label.obj'
-
-save_all_label_path1 = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all_label0.obj'
-save_all_label_path2 = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all_label1.obj'
-save_all_label_path3 = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all_label2.obj'
-save_all_label_path4 = 'D:/Data/MOT/save_fea_mat/'+seq_name+sub_seq_name+'_all_label3.obj'
-'''
-'''
-txt_result_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/txt_result/'+seq_name+sub_seq_name+'.txt'
-track_struct_path = 'C:/Users/tangz/OneDrive/Documents/Gaoang/MOT17/track_struct/'+seq_name+sub_seq_name+'.obj'
-'''
 
 max_length = 64
 feature_size = 4+512
@@ -107,12 +73,6 @@ num_classes = 2
 track_set = []
 remove_set = []
 
-
-#track_set = pickle.load(open(save_label_path,'rb'))
-#remove_set = pickle.load(open(save_remove_path,'rb'))
-
-
-#save_fea_mat = np.zeros((len(track_set),feature_size,max_length,2))
 
 
 global all_fea_mat
@@ -3108,18 +3068,7 @@ def refine_track_set():
             all_fea_label[n,3] = 1
     
     pickle.dump(all_fea_label, open(save_all_label_path,'wb'))
-    '''
-    save_batch_size = 5000
-    save_batch_num = int(np.ceil(len(all_fea_label)/save_batch_size))
-    #import pdb; pdb.set_trace()
-    for k in range(save_batch_num):
-        if k!=save_batch_num-1:
-            temp_label = all_fea_label[k*save_batch_size:(k+1)*save_batch_size,:]
-        else:
-            temp_label = all_fea_label[k*save_batch_size:,:]
-        temp_label_path = 'D:/Data/MOT/save_fea_mat/'+seq_name+'_all_label'+str(k)+'.obj'
-        pickle.dump(temp_label, open(temp_label_path,'wb'))
-    '''
+
     pickle.dump(track_struct,open(track_struct_path,'wb'))
     return
 
