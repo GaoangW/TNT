@@ -2657,7 +2657,7 @@ def TC_tracker():
     #import pdb; pdb.set_trace()
     
     num_patch, img_size = crop_det(track_struct['tracklet_mat'], track_struct['track_params']['crop_size'], 
-                               img_folder, crop_det_folder, 1)
+                               img_folder, crop_det_folder, 0)
     
     
     if track_struct['track_params']['appearance_mode']==0:
