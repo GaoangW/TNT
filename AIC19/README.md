@@ -28,10 +28,12 @@ The SCT results are saved in TNT/AIC19/txt_GPS_new.
 # Citation
 Use this bibtex to cite this repository:
 ```
-@article{wang2018exploit,
-  title={Exploit the Connectivity: Multi-Object Tracking with TrackletNet},
+@inproceedings{wang2019exploit,
+  title={Exploit the connectivity: Multi-object tracking with trackletnet},
   author={Wang, Gaoang and Wang, Yizhou and Zhang, Haotian and Gu, Renshu and Hwang, Jenq-Neng},
-  journal={arXiv preprint arXiv:1811.07258},
-  year={2018}
+  booktitle={Proceedings of the 27th ACM International Conference on Multimedia},
+  pages={482--490},
+  year={2019},
+  organization={ACM}
 }
 ```
