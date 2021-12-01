@@ -40,7 +40,7 @@ for n = 1:size(W,1)
     bbox(:,2) = Y(n,idx)';
     bbox(:,3) = W(n,idx)';
     bbox(:,4) = H(n,idx)';
-    overlapRatio = bboxOverlapRatio(bbox,bbox);
+    [overlapRatio,~] = overlap(bbox,bbox); #bboxOverlapRatio(bbox,bbox);
     for k = 1:length(idx)
         overlapRatio(k,k) = 0;
     end
